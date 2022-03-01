@@ -14,16 +14,6 @@ remoteIP="172.16.42.7"
 remoteDir="/home/delixir"
 project="haskoin"
 remoteProjectDir="$remoteUser@$remoteIP:$remoteDir/$project"
-
-# Note the project directory is presumed to be structured as:
-#
-# $project              # main directory
-# | $project-frontend   # frontend directory
-# | $project-backend    # backend directory
-# | server.sh
-# | README.md
-# | etc.
-
 # }}}
 
 
