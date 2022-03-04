@@ -6,9 +6,6 @@
 module EllipticCurve
   ( Point
   , fromCoords
-  , ex1
-  , ex4
-  , ex6
   ) where
 
 
@@ -59,11 +56,7 @@ instance KnownNat a => Semigroup (Point a b) where
     in
     if x1 == x2 then
       -- {{{
-      if y1 /= y2 then
-        -- {{{
-        Inf
-        -- }}}
-      else if y1 == 0 then
+      if y1 /= y2 || y1 == 0 then
         -- {{{
         Inf
         -- }}}
@@ -104,21 +97,21 @@ fromCoords x y =
   -- }}}
 
 
-ex1 :: [Maybe (Point 5 7)]
-ex1 =
-  [ fromCoords   2    4
-  , fromCoords (-1) (-1)
-  , fromCoords  18   77
-  , fromCoords   5    7
-  ]
-
-
-ex4 :: Point 5 7
-ex4 = Point 2 5 <> Point (-1) (-1)
-
-ex6 :: Point 5 7
-ex6 = Point (-1) (-1) <> Point (-1) (-1)
--- Book's solution is mistakingly for y = 1.
+-- ex1 :: [Maybe (Point 5 7)]
+-- ex1 =
+--   [ fromCoords   2    4
+--   , fromCoords (-1) (-1)
+--   , fromCoords  18   77
+--   , fromCoords   5    7
+--   ]
+-- 
+-- 
+-- ex4 :: Point 5 7
+-- ex4 = Point 2 5 <> Point (-1) (-1)
+-- 
+-- ex6 :: Point 5 7
+-- ex6 = Point (-1) (-1) <> Point (-1) (-1)
+-- -- Book's solution is mistakingly for y = 1.
 
 
 

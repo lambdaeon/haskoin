@@ -5,15 +5,8 @@
 
 module FieldElement
   ( FieldElement
+  , minShow
   , pow
-  , ex5
-  , ex70
-  , ex71
-  , ex72
-  , ex73
-  , ex80
-  , ex81
-  , ex82
   ) where
 
 
@@ -79,6 +72,10 @@ instance KnownNat m => Integral (FieldElement m) where
   -- }}}
 
 
+minShow :: FieldElement m -> String
+minShow (FE x) = show x
+
+
 pow :: forall (m :: Nat) b . (KnownNat m, Integral b)
     => FieldElement m
     -> b
@@ -89,22 +86,29 @@ pow a exp =
   -- }}}
 
 
-make19 :: Integer -> FieldElement 19
-make19 = fromInteger
-ex5 k  = sort $ make19 . (k *) <$> [0..18]
+-- {{{ EXERCISES 
+-- make19 :: Integer -> FieldElement 19
+-- make19 = fromInteger
+-- ex5 k  = sort $ make19 . (k *) <$> [0..18]
+-- 
+-- -- p = 7, 11, 17, 31
+-- ex70 = [(i :: FieldElement 7 ) ^ 6  | i <- [1..6] ]
+-- ex71 = [(i :: FieldElement 11) ^ 10 | i <- [1..10]]
+-- ex72 = [(i :: FieldElement 17) ^ 16 | i <- [1..16]]
+-- ex73 = [(i :: FieldElement 31) ^ 30 | i <- [1..30]]
+-- 
+-- ex80 :: FieldElement 31
+-- ex80 = 3 `div` 24
+-- ex81 :: FieldElement 31
+-- -- ex81 = 1 `div` (17 ^ 3)
+-- ex81 = 17 `pow` (-3)
+-- ex82 :: FieldElement 31
+-- -- ex82 = (1 `div` (4 ^ 4)) * 11
+-- ex82 = (4 `pow` (-4)) * 11
+-- }}}
 
--- p = 7, 11, 17, 31
-ex70 = [(i :: FieldElement 7 ) ^ 6  | i <- [1..6] ]
-ex71 = [(i :: FieldElement 11) ^ 10 | i <- [1..10]]
-ex72 = [(i :: FieldElement 17) ^ 16 | i <- [1..16]]
-ex73 = [(i :: FieldElement 31) ^ 30 | i <- [1..30]]
 
-ex80 :: FieldElement 31
-ex80 = 3 `div` 24
-ex81 :: FieldElement 31
--- ex81 = 1 `div` (17 ^ 3)
-ex81 = 17 `pow` (-3)
-ex82 :: FieldElement 31
--- ex82 = (1 `div` (4 ^ 4)) * 11
-ex82 = (4 `pow` (-4)) * 11
+
+
+
 
