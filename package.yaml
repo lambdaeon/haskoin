@@ -25,6 +25,7 @@ dependencies:
 - memory
 - bytestring
 - text
+- binary
 
 library:
   source-dirs: src
@@ -45,6 +46,7 @@ executables:
     - bytestring
     - text
     - hspec
+    - binary
 
 tests:
   haskoin-test:

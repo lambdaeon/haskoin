@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds            #-}
 {-# LANGUAGE KindSignatures       #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE OverloadedStrings    #-}
 
 
 module SECP256K1
@@ -9,14 +10,19 @@ module SECP256K1
   , generator
   , verify
   , signWith
+  , pointToSEC
+  , secToPub
   ) where
 
 
-import Debug.Trace (trace)
-import Data.Maybe (fromJust)
-import qualified FieldElement as FE
+import           Debug.Trace             (trace)
+import           Data.String             (fromString)
+import           Data.ByteString         (ByteString)
+import           FiniteCyclicGroup
+import qualified Data.ByteString          as BS
+import qualified FieldElement             as FE
 import qualified FiniteFieldEllipticCurve as FFEC
-import FiniteCyclicGroup
+import           Utils
 
 
 -- UTILS
@@ -42,6 +48,23 @@ type Message   = S256Order
 type Nonce     = S256Order
 type Signature = (S256Field, S256Order)
 -- }}}
+
+
+secToPub :: SecKey -> PubKey
+secToPub e = FFEC.scaleBy (toInteger e) generator
+
+
+pointToSEC :: Bool -> S256Point -> ByteString
+pointToSEC compressed point =
+  -- {{{
+  case (FFEC.getX point, FFEC.getY point) of
+    (Just x_, Just y_) ->
+         prependIntegerWithWord8 4 (toInteger x_)
+      <> integerTo32Bytes (toInteger y_)
+    _ ->
+      BS.empty
+  -- }}}
+
 
 
 verify :: PubKey -> Message -> Signature -> Bool
