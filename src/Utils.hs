@@ -1,6 +1,7 @@
 module Utils where
 
 
+import           Debug.Trace             (trace)
 import           Data.Function           ((&))
 import           Data.ByteString         (ByteString)
 import qualified Data.ByteString         as BS
@@ -8,7 +9,46 @@ import qualified Data.ByteString.Lazy    as BSL
 import qualified Data.ByteArray          as BA
 import qualified Data.ByteArray.Encoding as BAE
 import qualified Data.Binary             as Bin
+import qualified Data.Char               as Char
+import           Data.Char               (chr)
+import qualified Data.String             as String
 import qualified Data.Word               as W
+
+
+base58Chars :: [W.Word8]
+base58Chars =
+  -- {{{
+  map chr [48..122]
+  & filter
+      ( \c ->
+          Char.isAlphaNum c
+          && c /= '0'
+          && c /= 'O'
+          && c /= 'l'
+          && c /= 'I'
+      )
+  & String.fromString
+  & BS.unpack
+  -- }}}
+
+
+integerToBase58 :: Integer -> ByteString
+integerToBase58 n =
+  -- {{{
+  let
+    go theN soFar =
+      let
+        (newN, mod) = divMod theN 58
+      in
+      if newN > 0 then
+        go newN (fromInteger mod : soFar)
+      else
+        fromInteger mod : soFar
+  in
+  go n []
+  & map ((base58Chars !!) . fromInteger . toInteger)
+  & BS.pack
+  -- }}}
 
 
 convertToBase16 :: ByteString -> ByteString
