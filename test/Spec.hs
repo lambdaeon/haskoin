@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE KindSignatures      #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings   #-}
 
 
 module Main where
@@ -16,6 +17,8 @@ import qualified FieldElement             as FE
 import qualified EllipticCurve            as EC
 import qualified FiniteFieldEllipticCurve as FFEC
 import qualified SECP256K1
+import qualified SECP256K1.S256Point      as S256Point
+import qualified SECP256K1.Signature      as Signature
 
 main :: IO ()
 main = hspec $ do
@@ -78,8 +81,10 @@ main = hspec $ do
               SECP256K1.verify
                 p
                 0xec208baa0fc1c19f708a9ca96fdeff3ac3f230bb4a7ba4aede4942ad003c0f60
-                ( 0xac8d1c87e51d0d441be8b3dd5b05c8795b48875dffe00b7ffcfac23010d3a395
-                , 0x68342ceff8935ededd102dd876ffd6ba72d6a427a3edb13d26eb0781cb423c4
+                ( Signature.Signature
+                    { Signature.r = 0xac8d1c87e51d0d441be8b3dd5b05c8795b48875dffe00b7ffcfac23010d3a395
+                    , Signature.s = 0x68342ceff8935ededd102dd876ffd6ba72d6a427a3edb13d26eb0781cb423c4
+                    }
                 )
           ) <$> ex3_6_P
         )
@@ -90,8 +95,10 @@ main = hspec $ do
               SECP256K1.verify
                 p
                 0x7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d
-                ( 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c
-                , 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6
+                ( Signature.Signature 
+                    { Signature.r = 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c
+                    , Signature.s = 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6
+                    }
                 )
           ) <$> ex3_6_P
         )
@@ -113,10 +120,10 @@ main = hspec $ do
       shouldBe
         ( SECP256K1.signWith e k z
         )
-        ( Just
-            ( 0x2b698a0f0a4041b77e63488ad48c23e8e8838dd1fb7520408b121697b782ef22
-            , 0x1dbc63bfef4416705e602a7b564161167076d8b20990a0f26f316cff2cb0bc1a
-            )
+        ( Just $ Signature.Signature
+            { Signature.r = 0x2b698a0f0a4041b77e63488ad48c23e8e8838dd1fb7520408b121697b782ef22
+            , Signature.s = 0x1dbc63bfef4416705e602a7b564161167076d8b20990a0f26f316cff2cb0bc1a
+            }
         )
     -- }}}
 
@@ -124,14 +131,41 @@ main = hspec $ do
     -- {{{
     let fromSecret sec =
           let
-            pub = SECP256K1.secToPub sec
+            pub = SECP256K1.pubKeyOf sec
           in
-          SECP256K1.pointToSEC False pub
-    it "Successfully found the public key associated with 5000." $ do
+          S256Point.toSEC False pub
+    it "Successfully found the uncompressed public key associated with 5000." $ do
       (fromSecret 5000) `shouldBe` (fromString "04ffe558e388852f0120e46af2d1b370f85854a8eb0841811ece0e3e03d282d57c315dc72890a4f10a1481c031b03b351b0dc79901ca18a00cf009dbdb157a1d10")
-    it "Successfully found the public key associated with 2018^5." $ do
+    it "Successfully found the uncompressed public key associated with 2018^5." $ do
       (fromSecret $ 2018 ^ 5) `shouldBe` (fromString "04027f3da1918455e03c46f659266a1bb5204e959db7364d2f473bdf8f0a13cc9dff87647fd023c13b4a4994f17691895806e1b40b57f4fd22581a4f46851f3b06")
-    it "Successfully found the public key associated with 0xdeadbeef12345." $ do
+    it "Successfully found the uncompressed public key associated with 0xdeadbeef12345." $ do
       (fromSecret 0xdeadbeef12345) `shouldBe` (fromString "04d90cd625ee87dd38656dd95cf79f65f60f7273b67d3096e68bd81e4f5342691f842efa762fd59961d0e99803c61edba8b3e3f7dc3a341836f97733aebf987121")
+    -- }}}
+
+  describe "Chapter 4 - Exercise 2" $ do
+    -- {{{
+    let fromSecret sec =
+          let
+            pub = SECP256K1.pubKeyOf sec
+          in
+          S256Point.toSEC True pub
+    it "Successfully found the compressed public key associated with 5001." $ do
+      (fromSecret 5001) `shouldBe` (fromString "0357a4f368868a8a6d572991e484e664810ff14c05c0fa023275251151fe0e53d1")
+    it "Successfully found the compressed public key associated with 2019^5." $ do
+      (fromSecret $ 2019 ^ 5) `shouldBe` (fromString "02933ec2d2b111b92737ec12f1c5d20f3233a0ad21cd8b36d0bca7a0cfa5cb8701")
+    it "Successfully found the compressed public key associated with 0xdeadbeef54321." $ do
+      (fromSecret 0xdeadbeef54321) `shouldBe` (fromString "0296be5b1292f6c856b3c5654e886fc13511462059089cdf9c479623bfcbe77690")
+    -- }}}
+
+  describe "Chapter 4 - Exercise 3" $ do
+    -- {{{
+    it "DER format of the given signature was found successfully." $ do
+      shouldBe
+        ( Signature.toDER $ Signature.Signature
+            { Signature.r = 0x37206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c6
+            , Signature.s = 0x8ca63759c1157ebeaec0d03cecca119fc9a75bf8e6d0fa65c841c8e2738cdaec
+            }
+        )
+        "3045022037206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c60221008ca63759c1157ebeaec0d03cecca119fc9a75bf8e6d0fa65c841c8e2738cdaec"
     -- }}}
 

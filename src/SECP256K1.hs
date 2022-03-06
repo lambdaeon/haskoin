@@ -8,67 +8,39 @@ module SECP256K1
   ( n
   , p
   , generator
+  , pubKeyOf
   , verify
   , signWith
-  , pointToSEC
-  , secToPub
   ) where
 
 
 import           Debug.Trace             (trace)
 import           Data.String             (fromString)
-import           Data.ByteString         (ByteString)
 import           FiniteCyclicGroup
-import qualified Data.ByteString          as BS
 import qualified FieldElement             as FE
 import qualified FiniteFieldEllipticCurve as FFEC
 import           Utils
+import           SECP256K1.Constants
+import           SECP256K1.Signature
+import           SECP256K1.S256Field
+import           SECP256K1.S256Point
 
 
 -- UTILS
 -- {{{
-gx :: S256Field
-gx = 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
-gy :: S256Field
-gy = 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8
-generator :: S256Point
-generator = FFEC.unsafeFromCoords gx gy
-n  :: Integer
-n  = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
-p  :: Integer
-p  = 2 ^ 256 - 2 ^ 32 - 977
---                                                        p
---                               v----------------------------------------------------------------------------v
-type S256Field = FE.FieldElement 115792089237316195423570985008687907853269984665640564039457584007908834671663
-type S256Point = FFEC.Point      115792089237316195423570985008687907853269984665640564039457584007908834671663 0 7
-type S256Order = FE.FieldElement 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 type PubKey    = S256Point
 type SecKey    = S256Order
 type Message   = S256Order
 type Nonce     = S256Order
-type Signature = (S256Field, S256Order)
 -- }}}
 
 
-secToPub :: SecKey -> PubKey
-secToPub e = FFEC.scaleBy (toInteger e) generator
-
-
-pointToSEC :: Bool -> S256Point -> ByteString
-pointToSEC compressed point =
-  -- {{{
-  case (FFEC.getX point, FFEC.getY point) of
-    (Just x_, Just y_) ->
-         prependIntegerWithWord8 4 (toInteger x_)
-      <> integerTo32Bytes (toInteger y_)
-    _ ->
-      BS.empty
-  -- }}}
-
+pubKeyOf :: SecKey -> PubKey
+pubKeyOf e = FFEC.scaleBy (toInteger e) generator
 
 
 verify :: PubKey -> Message -> Signature -> Bool
-verify pubPoint z_ (r_, s) =
+verify pubPoint z_ Signature {r = r_, s = s} =
   -- {{{
   let
     z    = toInteger z_
@@ -98,7 +70,10 @@ signWith e_ k_ z_ = do
   r_ <- FFEC.getX $ FFEC.scaleBy k generator
   let r = toInteger r_
       s = fromInteger $ (z + r * e) * kInv
-  return (r_, s)
+  return $ Signature
+    { r = r_
+    , s = s
+    }
   -- }}}
 
 
