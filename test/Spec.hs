@@ -8,7 +8,6 @@ module Main where
 
 
 import           Debug.Trace        (trace)
-import           Crypto.Hash        (hashWith, SHA256 (..))
 import           Data.ByteString    (ByteString)
 import           Data.Maybe         (isJust)
 import           Data.String        (fromString)
@@ -108,15 +107,9 @@ main = hspec $ do
 
   describe "Chapter 3 - Exercise 7" $ do
     -- {{{
-    let hash256 :: ByteString -> Integer
-        hash256 bs =
-          let
-            digest = hashWith SHA256 (hashWith SHA256 bs)
-          in
-          read $ "0x" ++ show digest
-        e = 12345
+    let e = 12345
         k = 1234567890
-        z = fromInteger $ hash256 $ fromString "Programming Bitcoin!"
+        z = fromInteger $ Utils.bsToInteger $ Utils.hash256 "Programming Bitcoin!"
     it "Successfully signed \"Programming Bitcoin!\"." $ do
       shouldBe
         ( SECP256K1.signWith e k z
@@ -134,7 +127,7 @@ main = hspec $ do
           let
             pub = SECP256K1.pubKeyOf sec
           in
-          S256Point.toSEC False pub
+          Utils.encodeHex $ S256Point.toSEC False pub
     it "Successfully found the uncompressed public key associated with 5000." $ do
       (fromSecret 5000) `shouldBe` (fromString "04ffe558e388852f0120e46af2d1b370f85854a8eb0841811ece0e3e03d282d57c315dc72890a4f10a1481c031b03b351b0dc79901ca18a00cf009dbdb157a1d10")
     it "Successfully found the uncompressed public key associated with 2018^5." $ do
@@ -149,7 +142,7 @@ main = hspec $ do
           let
             pub = SECP256K1.pubKeyOf sec
           in
-          S256Point.toSEC True pub
+          Utils.encodeHex $ S256Point.toSEC True pub
     it "Successfully found the compressed public key associated with 5001." $ do
       (fromSecret 5001) `shouldBe` (fromString "0357a4f368868a8a6d572991e484e664810ff14c05c0fa023275251151fe0e53d1")
     it "Successfully found the compressed public key associated with 2019^5." $ do
@@ -184,5 +177,26 @@ main = hspec $ do
       shouldBe
         (Utils.integerToBase58 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6)
         "EQJsjkd6JaGwxrjEhfeqPenqHwrBmPQZjJGNSCHBkcF7"
+    -- }}}
+
+  describe "Chapter 4 - Exercise 5" $ do
+    -- {{{
+    let fromSecret comp test sec =
+          let
+            pub = SECP256K1.pubKeyOf sec
+          in
+          S256Point.address comp test pub
+    it "Successfully found the address corresponding to 5002." $ do
+      shouldBe
+        (fromSecret False True 5002)
+        "mmTPbXQFxboEtNRkwfh6K51jvdtHLxGeMA"
+    it "Successfully found the address corresponding to 2020^5." $ do
+      shouldBe
+        (fromSecret True True $ 2020^5)
+        "mopVkxp8UhXqRYbCYJsbeE1h1fiF64jcoH"
+    it "Successfully found the address corresponding to 0x12345deadbeef." $ do
+      shouldBe
+        (fromSecret True False 0x12345deadbeef)
+        "1F1Pn2y6pDb68E5nYJJeba4TLg2U7B6KF1"
     -- }}}
 

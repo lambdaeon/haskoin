@@ -20,6 +20,7 @@ description:         Bitcoin implementation in Haskell.
 
 dependencies:
 - base >= 4.7 && < 5
+- base16
 - groups
 - cryptonite
 - memory
@@ -39,6 +40,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
+    - base16
     - haskoin
     - groups
     - cryptonite

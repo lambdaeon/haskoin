@@ -6,11 +6,13 @@
 module SECP256K1.S256Point where
 
 
+import           Debug.Trace              (trace)
 import           Utils
 import qualified FieldElement             as FE
 import qualified FiniteFieldEllipticCurve as FFEC
 import qualified Data.ByteString          as BS
-import           Data.ByteString         (ByteString)
+import           Data.ByteString          (ByteString)
+import qualified Data.String              as String
 import           SECP256K1.Constants
 import           SECP256K1.S256Field
 
@@ -37,17 +39,29 @@ toSEC compressed point =
       let
         x = toInteger x_
         y = toInteger y_
+        tier1 =
+          if compressed then
+            if even y then
+              prependIntegerWithWord8 (Just 2) x
+            else
+              prependIntegerWithWord8 (Just 3) x
+          else
+            prependIntegerWithWord8 (Just 4) x <> integerToBS y
       in
-      if compressed then
-        if even y then
-          prependIntegerWithWord8 2 x
-        else
-          prependIntegerWithWord8 3 x
-      else
-        prependIntegerWithWord8 4 x <> integerTo32Bytes y
+      tier1
     _ ->
       BS.empty
   -- }}}
 
 
+address :: Bool -> Bool -> S256Point -> ByteString
+address compressed testnet point =
+  -- {{{
+  let
+    initBytes = if testnet then BS.pack [0x6f] else BS.pack [0x00]
+    sec       = toSEC compressed point
+    hashTier1 = initBytes <> hash160 sec
+  in
+  toBase58WithChecksum hashTier1
+  -- }}}
 

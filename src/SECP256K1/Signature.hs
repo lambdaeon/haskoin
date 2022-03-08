@@ -25,47 +25,29 @@ toDER :: Signature -> ByteString
 toDER Signature {..} =
   -- {{{
   let
-    prependLength w8s =
+    prependLength bs =
       -- {{{
       let
-        [lenW80, lenW81] = -- not perfect... but ok here.
-          -- {{{
-          length w8s
-          & flip div 2
-          & fromIntegral
-          & integralTo32Bytes
-          & BS.take 2
-          & BS.unpack
-          -- }}}
+        lenBS = BS.pack [fromIntegral $ BS.length bs]
       in
-      lenW80 : lenW81 : w8s
+      lenBS <> bs
       -- }}}
-    fromInitBS w8s =
+    fromInitBS bs =
       -- {{{
-      case w8s of
-        fstW8 : sndW8 : _ ->
-          -- {{{
-          let
-            tier1 =
-              -- {{{
-              if (fstW8 * 16 + sndW8) >= 0x80 then
-                48 : 48 : w8s
-              else
-                w8s
-              -- }}}
-          in
-          48 : 50 : prependLength tier1
-          -- }}}
-        _ ->
-          -- {{{
-          w8s
-          -- }}}
+      let
+        tier1 =
+          if bsToInteger (BS.take 1 bs) >= 0x80 then
+            BS.pack [0x00] <> bs
+          else
+            bs
+      in
+      BS.pack [0x02] <> prependLength tier1
       -- }}}
-    rBS = fromInitBS $ BS.unpack $ integralTo32Bytes r
-    sBS = fromInitBS $ BS.unpack $ integralTo32Bytes s
-    word8s = 51 : 48 : prependLength (rBS ++ sBS)
+    rBS = fromInitBS $ integralToBS r
+    sBS = fromInitBS $ integralToBS s
+    finalBS = BS.pack [0x30] <> prependLength (rBS <> sBS)
   in
-  BS.pack word8s
+  encodeHex finalBS
   -- }}}
 
 
