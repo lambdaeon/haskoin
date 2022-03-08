@@ -3,3 +3,4 @@
 !/.gitignore
 programmingBitcoin.pdf
 programmingbitcoin
+src/TestnetWalletPassPhrase.hs

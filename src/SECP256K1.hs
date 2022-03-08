@@ -9,13 +9,16 @@ module SECP256K1
   , p
   , generator
   , pubKeyOf
+  , wifOf
   , verify
   , signWith
+  , testnetWallet
   ) where
 
 
-import           Debug.Trace             (trace)
-import           Data.String             (fromString)
+import           Debug.Trace              (trace)
+import           Data.ByteString          (ByteString)
+import qualified Data.ByteString          as BS
 import           FiniteCyclicGroup
 import qualified FieldElement             as FE
 import qualified FiniteFieldEllipticCurve as FFEC
@@ -24,6 +27,7 @@ import           SECP256K1.Constants
 import           SECP256K1.Signature
 import           SECP256K1.S256Field
 import           SECP256K1.S256Point
+import           TestnetWalletPassPhrase (sourceForSecretKey)
 
 
 -- UTILS
@@ -38,6 +42,16 @@ type Nonce     = S256Order
 pubKeyOf :: SecKey -> PubKey
 pubKeyOf e = FFEC.scaleBy (toInteger e) generator
 
+wifOf :: Bool -> Bool -> SecKey -> ByteString
+wifOf compressed testnet e =
+  -- {{{
+  let
+    eBS = integralTo32Bytes e
+    pre = BS.pack $ if testnet then [0xef] else [0x80]
+    suf = BS.pack [0x01 | compressed]
+  in
+  toBase58WithChecksum $ pre <> eBS <> suf
+  -- }}}
 
 verify :: PubKey -> Message -> Signature -> Bool
 verify pubPoint z_ Signature {r = r_, s = s} =
@@ -75,6 +89,18 @@ signWith e_ k_ z_ = do
     , s = s
     }
   -- }}}
+
+
+testnetWallet :: ByteString
+testnetWallet =
+  -- {{{
+  let
+    sec = fromInteger $ bsToIntegerLE $ hash256 sourceForSecretKey
+    pub = pubKeyOf sec
+  in
+  address True True pub
+  -- }}}
+
 
 
 

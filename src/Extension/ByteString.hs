@@ -1,5 +1,6 @@
 module Extension.ByteString
   ( invForBE
+  , invForLE
   ) where
 
 
@@ -15,4 +16,15 @@ invForBE =
       BS.reverse
     BigEndian ->
       id
+  -- }}}
+
+
+invForLE :: ByteString -> ByteString
+invForLE =
+  -- {{{
+  case getSystemEndianness of
+    LittleEndian ->
+      id
+    BigEndian ->
+      BS.reverse
   -- }}}

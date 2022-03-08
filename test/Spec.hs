@@ -7,10 +7,11 @@
 module Main where
 
 
-import           Debug.Trace        (trace)
-import           Data.ByteString    (ByteString)
-import           Data.Maybe         (isJust)
-import           Data.String        (fromString)
+import           Debug.Trace              (trace)
+import qualified Data.ByteString          as BS
+import           Data.ByteString          (ByteString)
+import           Data.Maybe               (isJust)
+import           Data.String              (fromString)
 import           Test.Hspec
 import qualified FieldElement             as FE
 import qualified EllipticCurve            as EC
@@ -192,11 +193,35 @@ main = hspec $ do
         "mmTPbXQFxboEtNRkwfh6K51jvdtHLxGeMA"
     it "Successfully found the address corresponding to 2020^5." $ do
       shouldBe
-        (fromSecret True True $ 2020^5)
+        (fromSecret True True $ 2020 ^ 5)
         "mopVkxp8UhXqRYbCYJsbeE1h1fiF64jcoH"
     it "Successfully found the address corresponding to 0x12345deadbeef." $ do
       shouldBe
         (fromSecret True False 0x12345deadbeef)
         "1F1Pn2y6pDb68E5nYJJeba4TLg2U7B6KF1"
+    -- }}}
+
+  describe "Chapter 4 - Exercise 6" $ do
+    -- {{{
+    it "Successfully found the WIF of 5003." $ do
+      shouldBe
+        (SECP256K1.wifOf True True 5003)
+        "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN8rFTv2sfUK"
+    it "Successfully found the WIF of 2021^5." $ do
+      shouldBe
+        (SECP256K1.wifOf False True $ 2021 ^ 5)
+        "91avARGdfge8E4tZfYLoxeJ5sGBdNJQH4kvjpWAxgzczjbCwxic"
+    it "Successfully found the WIF of 0x54321deadbeef." $ do
+      shouldBe
+        (SECP256K1.wifOf True False 0x54321deadbeef)
+        "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgiuQJv1h8Ytr2S53a"
+    -- }}}
+
+  describe "Chapter 4 - Exercise 9" $ do
+    -- {{{
+    let addrStr   = show SECP256K1.testnetWallet
+        fstLetter = BS.take 1 SECP256K1.testnetWallet
+    it ("The public address of the testnet wallet is: " ++ addrStr) $ do
+      (fstLetter == "m" || fstLetter == "n") `shouldBe` True
     -- }}}
 

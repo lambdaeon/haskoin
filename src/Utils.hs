@@ -1,7 +1,23 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
-module Utils where
+module Utils
+  ( encodeHex
+  , encodeBase58
+  , integerToBase58
+  , toBase58WithChecksum
+  , bsToInteger
+  , bsToIntegerLE
+  , integerToBS
+  , integerToBSLE
+  , integralToBS
+  , integralToBSLE
+  , integralTo32Bytes
+  , integralTo32BytesLE
+  , prependIntegerWithWord8
+  , hash160
+  , hash256
+  ) where
 
 
 import           Debug.Trace             (trace)
@@ -48,11 +64,12 @@ encodeBase58 :: ByteString -> ByteString
 encodeBase58 bs =
   -- {{{
   let
-    (nulls, rest) = BS.partition (== 0) bs
-    pre = BS.replicate (BS.length nulls) 49
+    (nulls, rest) = BS.break (/= 0) bs
+    pre = BS.replicate (BS.length nulls) 49 -- '1' is 0 in Base58
   in
   pre <> integerToBase58 (bsToInteger rest)
   -- }}}
+
 
 integerToBase58 :: Integer -> ByteString
 integerToBase58 n =
@@ -91,15 +108,43 @@ toBase58WithChecksum bs =
 bsToInteger :: ByteString -> Integer
 bsToInteger =
   -- {{{
+  bsToIntegerHelper True
+  -- }}}
+
+
+bsToIntegerLE :: ByteString -> Integer
+bsToIntegerLE =
+  -- {{{
+  bsToIntegerHelper False
+  -- }}}
+
+
+bsToIntegerHelper :: Bool -> ByteString -> Integer
+bsToIntegerHelper be =
+  -- {{{
   let
     f w n = toInteger w .|. shiftL n 8
   in
-  BS.foldr f 0 . BS.invForBE
+  BS.foldr f 0 . (if be then BS.invForBE else BS.invForLE)
   -- }}}
 
 
 integerToBS :: Integer -> ByteString
-integerToBS i
+integerToBS =
+  -- {{{
+  integerToBSHelper True
+  -- }}}
+
+
+integerToBSLE :: Integer -> ByteString
+integerToBSLE =
+  -- {{{
+  integerToBSHelper False
+  -- }}}
+
+
+integerToBSHelper :: Bool -> Integer -> ByteString
+integerToBSHelper be i
   -- {{{
   | i > 0     =
       -- {{{
@@ -107,7 +152,7 @@ integerToBS i
         f 0 = Nothing
         f x = Just (fromInteger x :: W.Word8, x `shiftR` 8)
       in
-      BS.invForBE $ BS.unfoldr f i
+      (if be then BS.invForBE else BS.invForLE) $ BS.unfoldr f i
       -- }}}
   | otherwise =
       -- {{{
@@ -121,25 +166,41 @@ encodeHex = B16.encodeBase16'
 -- }}}
 
 
-
-
 integralToBS :: Integral n => n -> ByteString
 integralToBS = integerToBS . toInteger
+
+integralToBSLE :: Integral n => n -> ByteString
+integralToBSLE = integerToBSLE . toInteger
+
+
+integralTo32BytesHelper :: Integral n => Bool -> n -> ByteString
+integralTo32BytesHelper be n =
+  -- {{{
+  let
+    tier1 = (if be then integralToBS else integralToBSLE) n
+  in
+  BS.replicate (32 - BS.length tier1) 0 <> tier1
+  -- }}}
+
+
+integralTo32Bytes :: Integral n => n -> ByteString
+integralTo32Bytes =
+  -- {{{
+  integralTo32BytesHelper True
+  -- }}}
+
+
+integralTo32BytesLE :: Integral n => n -> ByteString
+integralTo32BytesLE =
+  -- {{{
+  integralTo32BytesHelper False
+  -- }}}
 
 
 prependIntegerWithWord8 :: Maybe W.Word8 -> Integer -> ByteString
 prependIntegerWithWord8 mW8 n =
   -- {{{
   maybe BS.empty (BS.pack . (: [])) mW8 <> integerToBS n
-  -- }}}
-
-
-appendWord8ToByteString :: W.Word8 -> ByteString -> ByteString
-appendWord8ToByteString w8 bs =
-  -- {{{
-  Bin.encode w8
-  & BSL.toStrict
-  & flip BS.append bs
   -- }}}
 
 
