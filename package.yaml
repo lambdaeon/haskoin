@@ -21,12 +21,15 @@ description:         Bitcoin implementation in Haskell.
 dependencies:
 - base >= 4.7 && < 5
 - base16
-- groups
-- cryptonite
-- memory
-- bytestring
-- text
 - binary
+- bytestring
+- containers
+- cryptonite
+- groups
+- megaparsec
+- memory
+- text
+- time
 
 library:
   source-dirs: src
@@ -41,14 +44,17 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - base16
-    - haskoin
-    - groups
-    - cryptonite
-    - memory
-    - bytestring
-    - text
-    - hspec
     - binary
+    - bytestring
+    - containers
+    - cryptonite
+    - groups
+    - haskoin
+    - hspec
+    - megaparsec
+    - memory
+    - text
+    - time
 
 tests:
   haskoin-test:
@@ -59,9 +65,11 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
+    - bytestring
+    - cryptonite
     - haskoin
     - hspec
-    - cryptonite
+    - hspec-megaparsec
+    - megaparsec
     - memory
-    - bytestring
     - text

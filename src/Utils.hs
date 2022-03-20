@@ -3,6 +3,7 @@
 
 module Utils
   ( encodeHex
+  , encodeHexLE
   , encodeBase58
   , integerToBase58
   , toBase58WithChecksum
@@ -20,30 +21,38 @@ module Utils
   ) where
 
 
-import           Debug.Trace             (trace)
-import           Crypto.Hash             (hashWith, SHA256 (..), RIPEMD160 (..))
-import qualified Data.Binary             as Bin
+import           Debug.Trace                 (trace)
+import           Crypto.Hash                 (hashWith, SHA256 (..), RIPEMD160 (..))
+import qualified Data.Binary                 as Bin
 import           Data.Bits
-import qualified Data.ByteArray          as BA
-import qualified Data.ByteArray.Encoding as BAE
-import           Data.ByteString         (ByteString)
-import qualified Data.ByteString         as BS
-import qualified Extension.ByteString    as BS
-import qualified Data.ByteString.Base16  as B16
-import qualified Data.ByteString.Lazy    as BSL
-import qualified Data.Char               as Char
-import           Data.Char               (chr)
-import           Data.Function           ((&))
-import           Data.Maybe              (fromMaybe)
-import           Data.Memory.Endian      (getSystemEndianness, Endianness (..))
-import           Data.String             (fromString)
-import qualified Data.String             as String
-import           Data.Text               (Text)
-import qualified Data.Text               as Text
-import qualified Data.Word               as W
+import qualified Data.ByteArray              as BA
+import qualified Data.ByteArray.Encoding     as BAE
+import qualified Data.ByteString             as BS
+import           Data.ByteString.Lazy        (ByteString)
+import qualified Data.ByteString.Lazy.Base16 as B16
+import qualified Data.ByteString.Lazy        as LBS
+import qualified Data.Char                   as Char
+import           Data.Char                   (chr)
+import           Data.Function               ((&))
+import           Data.Maybe                  (fromMaybe)
+import           Data.Memory.Endian          (getSystemEndianness, Endianness (..))
+import           Data.String                 (fromString)
+import qualified Data.String                 as String
+import           Data.Text                   (Text)
+import qualified Data.Text                   as Text
+import           Data.Word                   (Word8)
+import           Data.Void
+import qualified Extension.ByteString        as BS
+import qualified Extension.ByteString.Lazy   as LBS
+import           Text.Megaparsec       (Parsec)
+import qualified Text.Megaparsec       as P
+import qualified Text.Megaparsec.Byte  as BP
 
 
-base58Chars :: [W.Word8]
+type Parser = Parsec Void ByteString
+
+
+base58Chars :: [Word8]
 base58Chars =
   -- {{{
   map chr [48..122]
@@ -56,7 +65,7 @@ base58Chars =
           && c /= 'I'
       )
   & fromString
-  & BS.unpack
+  & LBS.unpack
   -- }}}
 
 
@@ -64,8 +73,8 @@ encodeBase58 :: ByteString -> ByteString
 encodeBase58 bs =
   -- {{{
   let
-    (nulls, rest) = BS.break (/= 0) bs
-    pre = BS.replicate (BS.length nulls) 49 -- '1' is 0 in Base58
+    (nulls, rest) = LBS.break (/= 0) bs
+    pre = LBS.replicate (LBS.length nulls) 49 -- '1' is 0 in Base58
   in
   pre <> integerToBase58 (bsToInteger rest)
   -- }}}
@@ -88,7 +97,7 @@ integerToBase58 n =
   in
   go n []
   & map ((base58Chars !!) . fromIntegral)
-  & BS.pack
+  & LBS.pack
   -- }}}
 
 
@@ -96,7 +105,7 @@ toBase58WithChecksum :: ByteString -> ByteString
 toBase58WithChecksum bs =
   -- {{{
   let
-    cs = BS.take 4 $ hash256 bs
+    cs = LBS.take 4 $ hash256 bs
     tier1 = bs <> cs
   in
   encodeBase58 tier1
@@ -125,7 +134,7 @@ bsToIntegerHelper be =
   let
     f w n = toInteger w .|. shiftL n 8
   in
-  BS.foldr f 0 . (if be then BS.invForBE else BS.invForLE)
+  LBS.foldr f 0 . (if be then LBS.invForBE else LBS.invForLE)
   -- }}}
 
 
@@ -150,19 +159,22 @@ integerToBSHelper be i
       -- {{{
       let
         f 0 = Nothing
-        f x = Just (fromInteger x :: W.Word8, x `shiftR` 8)
+        f x = Just (fromInteger x :: Word8, x `shiftR` 8)
       in
-      (if be then BS.invForBE else BS.invForLE) $ BS.unfoldr f i
+      (if be then LBS.invForBE else LBS.invForLE) $ LBS.unfoldr f i
       -- }}}
   | otherwise =
       -- {{{
-      BS.pack [0]
+      LBS.pack [0]
       -- }}}
   -- }}}
 
 
 encodeHex :: ByteString -> ByteString
 encodeHex = B16.encodeBase16'
+
+encodeHexLE :: ByteString -> ByteString
+encodeHexLE = encodeHex . LBS.invForLE
 -- }}}
 
 
@@ -177,9 +189,13 @@ integralTo32BytesHelper :: Integral n => Bool -> n -> ByteString
 integralTo32BytesHelper be n =
   -- {{{
   let
-    tier1 = (if be then integralToBS else integralToBSLE) n
+    (tier1, op) =
+      if be then
+        (integralToBS   n, (<>)     )
+      else
+        (integralToBSLE n, flip (<>))
   in
-  BS.replicate (32 - BS.length tier1) 0 <> tier1
+  LBS.replicate (32 - min 32 $ LBS.length tier1) 0x00 `op` tier1
   -- }}}
 
 
@@ -197,24 +213,24 @@ integralTo32BytesLE =
   -- }}}
 
 
-prependIntegerWithWord8 :: Maybe W.Word8 -> Integer -> ByteString
+prependIntegerWithWord8 :: Maybe Word8 -> Integer -> ByteString
 prependIntegerWithWord8 mW8 n =
   -- {{{
-  maybe BS.empty (BS.pack . (: [])) mW8 <> integerToBS n
+  maybe LBS.empty (LBS.pack . (: [])) mW8 <> integerToBS n
   -- }}}
 
 
 hash160 :: ByteString -> ByteString
 hash160 =
   -- {{{
-  BA.convert . hashWith RIPEMD160 . hashWith SHA256
+  LBS.fromStrict . BA.convert . hashWith RIPEMD160 . hashWith SHA256 . LBS.toStrict
   -- }}}
 
 
 hash256 :: ByteString -> ByteString
 hash256 =
   -- {{{
-  BA.convert . hashWith SHA256 . hashWith SHA256
+  LBS.fromStrict . BA.convert . hashWith SHA256 . hashWith SHA256 . LBS.toStrict
   -- }}}
 
 

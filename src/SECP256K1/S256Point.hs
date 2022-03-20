@@ -10,8 +10,8 @@ import           Debug.Trace              (trace)
 import           Utils
 import qualified FieldElement             as FE
 import qualified FiniteFieldEllipticCurve as FFEC
-import qualified Data.ByteString          as BS
-import           Data.ByteString          (ByteString)
+import qualified Data.ByteString.Lazy     as LBS
+import           Data.ByteString.Lazy     (ByteString)
 import qualified Data.String              as String
 import           SECP256K1.Constants
 import           SECP256K1.S256Field
@@ -50,7 +50,7 @@ toSEC compressed point =
       in
       tier1
     _ ->
-      BS.empty
+      LBS.empty
   -- }}}
 
 
@@ -58,7 +58,7 @@ address :: Bool -> Bool -> S256Point -> ByteString
 address compressed testnet point =
   -- {{{
   let
-    initBytes = if testnet then BS.pack [0x6f] else BS.pack [0x00]
+    initBytes = if testnet then LBS.pack [0x6f] else LBS.pack [0x00]
     sec       = toSEC compressed point
     hashTier1 = initBytes <> hash160 sec
   in

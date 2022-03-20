@@ -17,8 +17,8 @@ module SECP256K1
 
 
 import           Debug.Trace              (trace)
-import           Data.ByteString          (ByteString)
-import qualified Data.ByteString          as BS
+import           Data.ByteString.Lazy     (ByteString)
+import qualified Data.ByteString.Lazy     as LBS
 import           FiniteCyclicGroup
 import qualified FieldElement             as FE
 import qualified FiniteFieldEllipticCurve as FFEC
@@ -47,8 +47,8 @@ wifOf compressed testnet e =
   -- {{{
   let
     eBS = integralTo32Bytes e
-    pre = BS.pack $ if testnet then [0xef] else [0x80]
-    suf = BS.pack [0x01 | compressed]
+    pre = LBS.pack $ if testnet then [0xef] else [0x80]
+    suf = LBS.pack [0x01 | compressed]
   in
   toBase58WithChecksum $ pre <> eBS <> suf
   -- }}}
