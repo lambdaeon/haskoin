@@ -26,8 +26,12 @@ dependencies:
 - containers
 - cryptonite
 - groups
+- http-client
+- http-client-tls
+- http-conduit
 - megaparsec
 - memory
+- network
 - text
 - time
 
@@ -49,10 +53,14 @@ executables:
     - containers
     - cryptonite
     - groups
+    - http-client
+    - http-client-tls
+    - http-conduit
     - haskoin
     - hspec
     - megaparsec
     - memory
+    - network
     - text
     - time
 

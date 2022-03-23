@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 
+-- MODULE
+-- {{{
 module Utils
   ( encodeHex
   , encodeHexLE
@@ -13,14 +15,20 @@ module Utils
   , integerToBSLE
   , integralToBS
   , integralToBSLE
+  , integralToNBytes
+  , integralToNBytesLE
   , integralTo32Bytes
   , integralTo32BytesLE
+  , base16StringToBS
   , prependIntegerWithWord8
   , hash160
   , hash256
   ) where
+-- }}}
 
 
+-- IMPORTS
+-- {{{
 import           Debug.Trace                 (trace)
 import           Crypto.Hash                 (hashWith, SHA256 (..), RIPEMD160 (..))
 import qualified Data.Binary                 as Bin
@@ -40,18 +48,14 @@ import           Data.String                 (fromString)
 import qualified Data.String                 as String
 import           Data.Text                   (Text)
 import qualified Data.Text                   as Text
-import           Data.Word                   (Word8)
-import           Data.Void
+import           Data.Word                   (Word8, Word32)
 import qualified Extension.ByteString        as BS
 import qualified Extension.ByteString.Lazy   as LBS
-import           Text.Megaparsec       (Parsec)
-import qualified Text.Megaparsec       as P
-import qualified Text.Megaparsec.Byte  as BP
+-- }}}
 
 
-type Parser = Parsec Void ByteString
-
-
+-- FUNCTIONS
+-- {{{
 base58Chars :: [Word8]
 base58Chars =
   -- {{{
@@ -113,7 +117,7 @@ toBase58WithChecksum bs =
 
 
 -- From the original "haskoin" project.
--- {{{
+---------------------------------------
 bsToInteger :: ByteString -> Integer
 bsToInteger =
   -- {{{
@@ -175,7 +179,7 @@ encodeHex = B16.encodeBase16'
 
 encodeHexLE :: ByteString -> ByteString
 encodeHexLE = encodeHex . LBS.invForLE
--- }}}
+---------------------------------------
 
 
 integralToBS :: Integral n => n -> ByteString
@@ -185,31 +189,57 @@ integralToBSLE :: Integral n => n -> ByteString
 integralToBSLE = integerToBSLE . toInteger
 
 
-integralTo32BytesHelper :: Integral n => Bool -> n -> ByteString
-integralTo32BytesHelper be n =
+integralToNBytesHelper :: Integral a => Bool -> Word -> a -> ByteString
+integralToNBytesHelper be n_ x =
   -- {{{
   let
+    n = fromIntegral n_
     (tier1, op) =
       if be then
-        (integralToBS   n, (<>)     )
+        (integralToBS   x, (<>)     )
       else
-        (integralToBSLE n, flip (<>))
+        (integralToBSLE x, flip (<>))
   in
-  LBS.replicate (32 - min 32 $ LBS.length tier1) 0x00 `op` tier1
+  LBS.replicate (n - min n (fromIntegral $ LBS.length tier1)) 0x00 `op` tier1
+  -- }}}
+
+
+integralToNBytes :: Integral n => Word -> n -> ByteString
+integralToNBytes =
+  -- {{{
+  integralToNBytesHelper True
+  -- }}}
+
+
+integralToNBytesLE :: Integral n => Word -> n -> ByteString
+integralToNBytesLE =
+  -- {{{
+  integralToNBytesHelper False
   -- }}}
 
 
 integralTo32Bytes :: Integral n => n -> ByteString
 integralTo32Bytes =
   -- {{{
-  integralTo32BytesHelper True
+  integralToNBytes 32
   -- }}}
 
 
 integralTo32BytesLE :: Integral n => n -> ByteString
 integralTo32BytesLE =
   -- {{{
-  integralTo32BytesHelper False
+  integralToNBytesLE 32
+  -- }}}
+
+
+base16StringToBS :: String -> Maybe ByteString
+base16StringToBS b16 =
+  -- {{{
+  case B16.decodeBase16 (fromString b16) of
+    Right bs ->
+      Just bs
+    _ ->
+      Nothing
   -- }}}
 
 
@@ -232,7 +262,7 @@ hash256 =
   -- {{{
   LBS.fromStrict . BA.convert . hashWith SHA256 . hashWith SHA256 . LBS.toStrict
   -- }}}
-
+-- }}}
 
 
 

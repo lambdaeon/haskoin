@@ -1,6 +1,7 @@
 module Extension.ByteString.Lazy
   ( invForBE
   , invForLE
+  , chunksOf
   ) where
 
 
@@ -27,4 +28,22 @@ invForLE =
       id
     BigEndian ->
       LBS.reverse
+  -- }}}
+
+
+build :: ((a -> [a] -> [a]) -> [a] -> [a]) -> [a]
+build g = g (:) []
+
+
+-- from the `split` package.
+chunksOf :: Int -> ByteString -> [ByteString]
+chunksOf i bs =
+  -- {{{
+  let
+    ls = LBS.unpack bs
+    splitter :: [e] -> ([e] -> a -> a) -> a -> a
+    splitter [] _ n = n
+    splitter l c n  = l `c` splitter (Prelude.drop i l) c n
+  in
+  fmap (LBS.pack . Prelude.take i) (build (splitter ls))
   -- }}}

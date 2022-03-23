@@ -2,30 +2,38 @@
 {-# LANGUAGE KindSignatures      #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE NumericUnderscores #-}
 
 
 module Main where
 
 
-import           Debug.Trace              (trace)
-import           Data.ByteString.Lazy     (ByteString)
-import qualified Data.ByteString.Lazy     as LBS
-import qualified Data.ByteString          as BS
-import           Data.Maybe               (isJust)
-import           Data.String              (fromString)
-import           Data.Varint              (Varint (..))
-import qualified Data.Varint              as Varint
+import           Debug.Trace               (trace)
+import           Data.ByteString.Lazy      (ByteString)
+import qualified Data.ByteString.Lazy      as LBS
+import qualified Data.ByteString           as BS
+import           Data.Function             ((&))
+import           Data.Maybe                (isJust)
+import           Data.Serializable
+import           Data.String               (fromString)
+import           Data.Varint               (Varint (..))
+import qualified Data.Varint               as Varint
+import qualified Extension.ByteString.Lazy as LBS
+import qualified Locktime
 import           Test.Hspec
 import           Test.Hspec.Megaparsec
-import qualified FieldElement             as FE
-import qualified EllipticCurve            as EC
-import qualified FiniteFieldEllipticCurve as FFEC
+import qualified FieldElement              as FE
+import qualified EllipticCurve             as EC
+import qualified FiniteFieldEllipticCurve  as FFEC
+import qualified Script
 import qualified SECP256K1
-import qualified SECP256K1.S256Point      as S256Point
-import qualified SECP256K1.Signature      as Signature
-import qualified Text.Megaparsec          as P
+import qualified SECP256K1.S256Point       as S256Point
+import qualified SECP256K1.Signature       as Signature
+import qualified Text.Megaparsec           as P
 import qualified Tx
-import qualified Utils                    as Utils
+import qualified TxIn
+import qualified TxOut
+import qualified Utils                     as Utils
 
 main :: IO ()
 main = hspec $ do
@@ -235,29 +243,93 @@ main = hspec $ do
     -- {{{
     let testTx = Utils.integerToBS 0x010000000456919960ac691763688d3d3bcea9ad6ecaf875df5339e148a1fc61c6ed7a069e010000006a47304402204585bcdef85e6b1c6af5c2669d4830ff86e42dd205c0e089bc2a821657e951c002201024a10366077f87d6bce1f7100ad8cfa8a064b39d4e8fe4ea13a7b71aa8180f012102f0da57e85eec2934a82a585ea337ce2f4998b50ae699dd79f5880e253dafafb7feffffffeb8f51f4038dc17e6313cf831d4f02281c2a468bde0fafd37f1bf882729e7fd3000000006a47304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a7160121035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937feffffff567bf40595119d1bb8a3037c356efd56170b64cbcc160fb028fa10704b45d775000000006a47304402204c7c7818424c7f7911da6cddc59655a70af1cb5eaf17c69dadbfc74ffa0b662f02207599e08bc8023693ad4e9527dc42c34210f7a7d1d1ddfc8492b654a11e7620a0012102158b46fbdff65d0172b7989aec8850aa0dae49abfb84c81ae6e5b251a58ace5cfeffffffd63a5e6c16e620f86f375925b21cabaf736c779f88fd04dcad51d26690f7f345010000006a47304402200633ea0d3314bea0d95b3cd8dadb2ef79ea8331ffe1e61f762c0f6daea0fabde022029f23b3e9c30f080446150b23852028751635dcee2be669c2a1686a4b5edf304012103ffd6f4a67e94aba353a00882e563ff2722eb4cff0ad6006e86ee20dfe7520d55feffffff0251430f00000000001976a914ab0c0b2e98b1ab6dbf67d4750b0a56244948a87988ac005a6202000000001976a9143c82d7df364eb6c75be8c80df2b3eda8db57397088ac46430600
     it "The sample serialized tx is meant for version 1." $ do
-      P.runParser Tx.parser "" testTx `parseSatisfies` ((== 1) . Tx.getTxVersion)
+      P.runParser parser "" testTx `parseSatisfies` ((== 1) . Tx.getTxVersion)
     -- }}}
 
   describe "\nChapter 5 - Exercise Mine01" $ do
     -- {{{
     let varint0 = Varint 0xffffffedcb112200
-        ser0    = Varint.serializeLE varint0
+        ser0    = serialize varint0
         varint1 = Varint 0xfdfead234
-        ser1    = Varint.serializeLE varint1
+        ser1    = serialize varint1
         varint2 = Varint 0x45671
-        ser2    = Varint.serializeLE varint2
+        ser2    = serialize varint2
     it "Serialized and parsed back 0xffffffedcb112200 successfully." $ do
-      P.runParser Varint.parser "" ser0 `shouldParse` varint0
+      P.runParser parser "" ser0 `shouldParse` varint0
     it "Serialized and parsed back 0xfdfead234        successfully." $ do
-      P.runParser Varint.parser "" ser1 `shouldParse` varint1
+      P.runParser parser "" ser1 `shouldParse` varint1
     it "Serialized and parsed back 0x45671            successfully." $ do
-      P.runParser Varint.parser "" ser2 `shouldParse` varint2
+      P.runParser parser "" ser2 `shouldParse` varint2
     -- }}}
 
-  describe "\nChapter 5 - Exercise 2" $ do
+  describe "\nChapter 5 - Exercise 5" $ do
     -- {{{
-    let testTx = Utils.integerToBS 0x010000000456919960ac691763688d3d3bcea9ad6ecaf875df5339e148a1fc61c6ed7a069e010000006a47304402204585bcdef85e6b1c6af5c2669d4830ff86e42dd205c0e089bc2a821657e951c002201024a10366077f87d6bce1f7100ad8cfa8a064b39d4e8fe4ea13a7b71aa8180f012102f0da57e85eec2934a82a585ea337ce2f4998b50ae699dd79f5880e253dafafb7feffffffeb8f51f4038dc17e6313cf831d4f02281c2a468bde0fafd37f1bf882729e7fd3000000006a47304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a7160121035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937feffffff567bf40595119d1bb8a3037c356efd56170b64cbcc160fb028fa10704b45d775000000006a47304402204c7c7818424c7f7911da6cddc59655a70af1cb5eaf17c69dadbfc74ffa0b662f02207599e08bc8023693ad4e9527dc42c34210f7a7d1d1ddfc8492b654a11e7620a0012102158b46fbdff65d0172b7989aec8850aa0dae49abfb84c81ae6e5b251a58ace5cfeffffffd63a5e6c16e620f86f375925b21cabaf736c779f88fd04dcad51d26690f7f345010000006a47304402200633ea0d3314bea0d95b3cd8dadb2ef79ea8331ffe1e61f762c0f6daea0fabde022029f23b3e9c30f080446150b23852028751635dcee2be669c2a1686a4b5edf304012103ffd6f4a67e94aba353a00882e563ff2722eb4cff0ad6006e86ee20dfe7520d55feffffff0251430f00000000001976a914ab0c0b2e98b1ab6dbf67d4750b0a56244948a87988ac005a6202000000001976a9143c82d7df364eb6c75be8c80df2b3eda8db57397088ac46430600
-    it "The sample serialized tx is meant for version 1." $ do
-      P.runParser Tx.parser "" testTx `parseSatisfies` ((== 1) . Tx.getTxVersion)
+    let testTx     = Utils.integerToBS 0x010000000456919960ac691763688d3d3bcea9ad6ecaf875df5339e148a1fc61c6ed7a069e010000006a47304402204585bcdef85e6b1c6af5c2669d4830ff86e42dd205c0e089bc2a821657e951c002201024a10366077f87d6bce1f7100ad8cfa8a064b39d4e8fe4ea13a7b71aa8180f012102f0da57e85eec2934a82a585ea337ce2f4998b50ae699dd79f5880e253dafafb7feffffffeb8f51f4038dc17e6313cf831d4f02281c2a468bde0fafd37f1bf882729e7fd3000000006a47304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a7160121035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937feffffff567bf40595119d1bb8a3037c356efd56170b64cbcc160fb028fa10704b45d775000000006a47304402204c7c7818424c7f7911da6cddc59655a70af1cb5eaf17c69dadbfc74ffa0b662f02207599e08bc8023693ad4e9527dc42c34210f7a7d1d1ddfc8492b654a11e7620a0012102158b46fbdff65d0172b7989aec8850aa0dae49abfb84c81ae6e5b251a58ace5cfeffffffd63a5e6c16e620f86f375925b21cabaf736c779f88fd04dcad51d26690f7f345010000006a47304402200633ea0d3314bea0d95b3cd8dadb2ef79ea8331ffe1e61f762c0f6daea0fabde022029f23b3e9c30f080446150b23852028751635dcee2be669c2a1686a4b5edf304012103ffd6f4a67e94aba353a00882e563ff2722eb4cff0ad6006e86ee20dfe7520d55feffffff0251430f00000000001976a914ab0c0b2e98b1ab6dbf67d4750b0a56244948a87988ac005a6202000000001976a9143c82d7df364eb6c75be8c80df2b3eda8db57397088ac46430600
+        txParseRes = P.runParser parser "" $ trace ("THE BYTESTRING: " ++ show (LBS.chunksOf 2 $ Utils.encodeHex testTx)) testTx
+        (mScriptSig, mScriptPubKey, mAmount) =
+          -- {{{
+          case trace ("PARSE RESULT: " ++ show txParseRes) txParseRes of
+            Right tx ->
+              -- {{{
+              case (Tx.getTxTxIns tx, Tx.getTxTxOuts tx) of
+                ( _ : sndIn : _, fstOut : sndOut : _) ->
+                  ( Just $ TxIn.txInScriptSig      sndIn
+                  , Just $ TxOut.txOutScriptPubKey fstOut
+                  , Just $ TxOut.txOutAmount       sndOut
+                  )
+                _ ->
+                  (Nothing, Nothing, Nothing)
+              -- }}}
+            _ ->
+              -- {{{
+              (Nothing, Nothing, Nothing)
+              -- }}}
+          -- }}}
+        scriptSigAns =
+          -- {{{
+          Just $ Script.Stack
+            [ Script.Element $ Utils.integralToBS 0x304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a71601
+            , Script.Element $ Utils.integralToBS 0x035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937
+            ]
+          -- }}}
+        scriptPubKeyAns =
+          -- {{{
+          Just $ Script.Stack
+            [ Script.OpCommand Script.OP_DUP
+            , Script.OpCommand Script.OP_HASH160
+            , Script.Element $ Utils.integralToBS 0xab0c0b2e98b1ab6dbf67d4750b0a56244948a879
+            , Script.OpCommand Script.OP_EQUALVERIFY
+            , Script.OpCommand Script.OP_CHECKSIG
+            ]
+          -- }}}
+        amountAns = Just 40_000_000
+    it "Successfully parsed the scriptSig." $ do
+      mScriptSig `shouldBe` scriptSigAns
+    it "Successfully parsed the scriptPubKey." $ do
+      mScriptPubKey `shouldBe` scriptPubKeyAns
+    it "Successfully parsed the amount." $ do
+      mAmount `shouldBe` amountAns
+    -- }}}
+
+  describe "\nChapter 6 - Exercise Mine01" $ do
+    -- {{{
+    let ser0    = serialize Script.sampleStack0
+        target0 = Script.sampleStack0BS
+        ser1    = serialize Script.sampleStack1
+        target1 = Script.sampleStack1BS
+        ser2    = serialize Script.sampleStack2
+        target2 = Script.sampleStack2BS
+    it "Script sample 0 serialized correctly." $ do
+      ser0 `shouldBe` target0
+    it "Script sample 0 parsed correctly." $ do
+      P.runParser parser "" target0 `shouldParse` Script.sampleStack0
+    it "Script sample 1 serialized correctly." $ do
+      ser1 `shouldBe` target1
+    it "Script sample 1 parsed correctly." $ do
+      P.runParser parser "" target1 `shouldParse` Script.sampleStack1
+    it "Script sample 2 serialized correctly." $ do
+      ser2 `shouldBe` target2
+    it "Script sample 2 parsed correctly." $ do
+      P.runParser parser "" target2 `shouldParse` Script.sampleStack2
     -- }}}
 

@@ -2,6 +2,7 @@
 
 
 # clear
+echo -e "\n\n\n"
 date
 echo -e "===============================\n"
 
@@ -11,6 +12,7 @@ echo -e "===============================\n"
 # Change these accordingly:
 remoteUser="delixir"
 remoteIP="172.16.42.7"
+# remoteIP="192.168.8.101"
 remoteDir="/home/delixir"
 project="haskoin"
 remoteProjectDir="$remoteUser@$remoteIP:$remoteDir/$project"
