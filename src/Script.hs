@@ -9,6 +9,8 @@ module Script
   , ScriptPubKey
   , Command (..)
   , Operation (..)
+  , operationFromOpCode
+  , operationToOpCode
   , sampleStack0
   , sampleStack1
   , sampleStack2
@@ -34,42 +36,8 @@ import qualified Text.Megaparsec.Byte  as BP
 import           Utils
 
 
-sampleStack0 :: Stack
-sampleStack0 = Stack
-  [ Element $ integerToBS 0x3045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01
-  , Element $ integerToBS 0x0349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
-  ]
-sampleStack0BS :: ByteString
-sampleStack0BS =
-  integerToBS 0x6b483045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01210349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
-  --                3045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01  0349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
-
-sampleStack1 :: Stack
-sampleStack1 = Stack
-  [ OpCommand OP_DUP
-  , OpCommand OP_HASH160
-  , Element $ integerToBS 0xbc3b654dca7e56b04dca18f2566cdaf02e8d9ada
-  , OpCommand OP_EQUALVERIFY
-  , OpCommand OP_CHECKSIG
-  ]
-sampleStack1BS :: ByteString
-sampleStack1BS =
-  integerToBS 0x1976a914bc3b654dca7e56b04dca18f2566cdaf02e8d9ada88ac
-
-
-sampleStack2 :: Stack
-sampleStack2 = Stack
-  [ OpCommand OP_DUP
-  , OpCommand OP_HASH160
-  , Element $ integerToBS 0x1c4bc762dd5423e332166702cb75f40df79fea12
-  , OpCommand OP_EQUALVERIFY
-  , OpCommand OP_CHECKSIG
-  ]
-sampleStack2BS :: ByteString
-sampleStack2BS =
-  integerToBS 0x1976a9141c4bc762dd5423e332166702cb75f40df79fea1288ac
-
-
+-- COMMAND
+-- {{{
 data Command
   = Element   ByteString
   | OpCommand Operation
@@ -97,23 +65,30 @@ instance Serializable Command where
     -- }}}
   parser = do
     -- {{{
-    fstByte <- P.dbg "C00" $ P.label "First byte of a script command" P.anySingle
-    if fstByte >= 1 || fstByte <= 75 then do
-      bytes <- P.dbg "C01" $ P.takeP (Just "Element bytes") (fromIntegral fstByte)
+    fstByte <- P.dbg "CMD FIRST BYTE" $ P.label "First byte of a script command" P.anySingle
+    if fstByte >= 1 && fstByte <= 75 then do
+      bytes <- P.dbg "ELEMENT BYTES #1" $ P.takeP (Just "Element bytes") (fromIntegral fstByte)
       return $ Element bytes
     else if fstByte == 76 then do
-      opLen <- P.dbg "C02" $ P.label "Byte that indicates the length of the element" P.anySingle
-      bytes <- P.dbg "C03" $ P.takeP (Just "Element bytes") (fromIntegral opLen)
+      opLen <- P.dbg "ELEMENT BYTES COUNT" $ P.label "Byte that indicates the length of the element" P.anySingle
+      bytes <- P.dbg "ELEMENT BYTES #2" $ P.takeP (Just "Element bytes") (fromIntegral opLen)
       return $ Element bytes
     else if fstByte == 77 then do
-      opLen <- P.dbg "C04" $ P.takeP (Just "Bytes that indicate the length of the element") 2
-      bytes <- P.dbg "C05" $ P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
+      opLen <- P.dbg "ELEMENT BYTES COUNT" $ P.takeP (Just "Bytes that indicate the length of the element") 2
+      bytes <- P.dbg "ELEMENT BYTES #3" $ P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
+      return $ Element bytes
+    else if fstByte == 78 then do
+      opLen <- P.dbg "ELEMENT BYTES COUNT" $ P.takeP (Just "Bytes that indicate the length of the element") 4
+      bytes <- P.dbg "ELEMENT BYTES #4" $ P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
       return $ Element bytes
     else do
       return $ OpCommand $ operationFromOpCode fstByte
     -- }}}
+-- }}}
 
 
+-- OPERATION
+-- {{{
 data Operation
   -- {{{
   = OP_0
@@ -207,7 +182,7 @@ data Operation
   | OP_NOP8
   | OP_NOP9
   | OP_NOP10
-  deriving (Eq, Show)
+  deriving (Eq, Show, Bounded)
   -- }}}
 
 operationFromOpCode :: Word8 -> Operation
@@ -404,8 +379,11 @@ operationToOpCode op =
     OP_NOP9                -> 184
     OP_NOP10               -> 185
   -- }}}
+-- }}}
 
 
+-- STACK
+-- {{{
 newtype Stack = Stack
   { getStack :: [Command]
   } deriving (Eq, Show)
@@ -427,8 +405,48 @@ instance Serializable Stack where
     commands <- P.dbg "S01" $ Varint.lengthPrefixed parser
     return $ Stack commands
     -- }}}
-
+-- }}}
 
 
 type ScriptSig    = Stack
 type ScriptPubKey = Stack
+
+
+-- SAMPLE VALUES
+-- {{{
+sampleStack0 :: Stack
+sampleStack0 = Stack
+  [ Element $ integerToBS 0x3045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01
+  , Element $ integerToBS 0x0349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
+  ]
+sampleStack0BS :: ByteString
+sampleStack0BS =
+  integerToBS 0x6b483045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01210349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
+  --                3045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01  0349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
+
+
+sampleStack1 :: Stack
+sampleStack1 = Stack
+  [ OpCommand OP_DUP
+  , OpCommand OP_HASH160
+  , Element $ integerToBS 0xbc3b654dca7e56b04dca18f2566cdaf02e8d9ada
+  , OpCommand OP_EQUALVERIFY
+  , OpCommand OP_CHECKSIG
+  ]
+sampleStack1BS :: ByteString
+sampleStack1BS =
+  integerToBS 0x1976a914bc3b654dca7e56b04dca18f2566cdaf02e8d9ada88ac
+
+
+sampleStack2 :: Stack
+sampleStack2 = Stack
+  [ OpCommand OP_DUP
+  , OpCommand OP_HASH160
+  , Element $ integerToBS 0x1c4bc762dd5423e332166702cb75f40df79fea12
+  , OpCommand OP_EQUALVERIFY
+  , OpCommand OP_CHECKSIG
+  ]
+sampleStack2BS :: ByteString
+sampleStack2BS =
+  integerToBS 0x1976a9141c4bc762dd5423e332166702cb75f40df79fea1288ac
+-- }}}

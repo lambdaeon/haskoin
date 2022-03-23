@@ -16,6 +16,7 @@ import           Data.Word                   (Word)
 import           Extension.ByteString.Parser
 import           Text.Megaparsec             (Parsec)
 import qualified Text.Megaparsec             as P
+import qualified Text.Megaparsec.Debug       as P
 import qualified Text.Megaparsec.Byte        as BP
 import           Utils
 
@@ -83,9 +84,10 @@ countParser = fromIntegral . unVarint <$> parser
 
 
 -- from: https://stackoverflow.com/a/70429612
-lengthPrefixed :: Parser a -> Parser [a]
-lengthPrefixed elemParser = do
+lengthPrefixed :: Show a => Parser a -> Parser [a]
+lengthPrefixed elemParser' = do
   -- {{{
+  let elemParser = P.dbg "ELEM PARSER" elemParser'
   bytesCount <- countParser
   start <- P.getOffset
   let finalOffset = (trace ("OFFSET START: " ++ show start) start) + bytesCount

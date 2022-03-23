@@ -16,6 +16,7 @@ import           Data.Serializable
 import           Data.Word                   (Word32)
 import           Extension.ByteString.Parser 
 import qualified Text.Megaparsec             as P
+import qualified Text.Megaparsec.Debug       as P
 import           Script                      (ScriptSig)
 import qualified Script   
 import           Utils
@@ -61,9 +62,9 @@ instance Serializable TxIn where
     -- }}}
   parser = do
     -- {{{
-    txInPrevTx     <- P.takeP (Just "prev tx") 32
-    txInPrevIndex  <- word32ParserLE "prev index"
-    txInScriptSig  <- parser
-    txInSequence   <- word32ParserLE "sequence"  
+    txInPrevTx     <- P.dbg "TXIN PREV TX" $ P.takeP (Just "prev tx") 32
+    txInPrevIndex  <- P.dbg "TXIN PREV INDEX" $ word32ParserLE "prev index"
+    txInScriptSig  <- P.dbg "TXIN SCRIPTSIG" parser
+    txInSequence   <- P.dbg "TXIN SEQUENCE" $ word32ParserLE "sequence"  
     return $ TxIn {..}
   -- }}}

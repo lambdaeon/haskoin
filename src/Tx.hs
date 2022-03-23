@@ -36,6 +36,7 @@ import           Locktime                    (Locktime)
 import qualified Locktime
 import           Network.HTTP.Simple         (httpLbs, getResponseBody, Request)
 import qualified Text.Megaparsec             as P
+import qualified Text.Megaparsec.Debug       as P
 import           TxIn                        (TxIn (..))
 import qualified TxIn
 import           TxOut                       (TxOut (..))
@@ -128,12 +129,12 @@ instance Serializable Tx where
     -- }}}
   parser = do
     -- {{{
-    txVersion  <- word32ParserLE "version"
-    numTxIns   <- Varint.countParser
-    txTxIns    <- replicateM numTxIns  parser
-    numTxOuts  <- Varint.countParser
-    txTxOuts   <- replicateM numTxOuts parser
-    txLocktime <- parser
+    txVersion  <- P.dbg "VERSION" $ word32ParserLE "version"
+    numTxIns   <- P.dbg "NUM TXINS" Varint.countParser
+    txTxIns    <- P.dbg "TXINS" $ replicateM numTxIns  parser
+    numTxOuts  <- P.dbg "NUM TXOUTS" Varint.countParser
+    txTxOuts   <- P.dbg "TXOUTS" $ replicateM numTxOuts parser
+    txLocktime <- P.dbg "LOCKTIME" parser
     let txId      = LBS.empty
         txTestnet = False
     return $ Tx {..}

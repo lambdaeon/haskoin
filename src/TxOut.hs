@@ -35,12 +35,14 @@ instance Serializable TxOut where
     -- }}}
   parser = do
     -- {{{
-    txOutAmount       <- P.dbg "A" $ fromInteger . bsToIntegerLE <$> P.takeP (Just "amount") 8
-    txOutScriptPubKey <- P.dbg "B" parser
+    txOutAmount       <- P.dbg "TXOUT AMOUNT" $ fromInteger . bsToIntegerLE <$> P.takeP (Just "amount") 8
+    txOutScriptPubKey <- P.dbg "TXOUT SCRIPTPUBKEY" parser
     return $ TxOut {..}
     -- }}}
 
 
+-- SAMPLE VALUES
+-- {{{
 sampleTxOut1, sampleTxOut2 :: ByteString
 sampleTxOut1 =
   -- {{{
@@ -58,3 +60,6 @@ sampleTxOut2 =
   in
   amount <> scriptPK
   -- }}}
+-- }}}
+
+
