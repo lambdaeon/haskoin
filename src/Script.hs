@@ -65,21 +65,21 @@ instance Serializable Command where
     -- }}}
   parser = do
     -- {{{
-    fstByte <- P.dbg "CMD FIRST BYTE" $ P.label "First byte of a script command" P.anySingle
+    fstByte <- P.label "First byte of a script command" P.anySingle
     if fstByte >= 1 && fstByte <= 75 then do
-      bytes <- P.dbg "ELEMENT BYTES #1" $ P.takeP (Just "Element bytes") (fromIntegral fstByte)
+      bytes <- P.takeP (Just "Element bytes") (fromIntegral fstByte)
       return $ Element bytes
     else if fstByte == 76 then do
-      opLen <- P.dbg "ELEMENT BYTES COUNT" $ P.label "Byte that indicates the length of the element" P.anySingle
-      bytes <- P.dbg "ELEMENT BYTES #2" $ P.takeP (Just "Element bytes") (fromIntegral opLen)
+      opLen <- P.label "Byte that indicates the length of the element" P.anySingle
+      bytes <- P.takeP (Just "Element bytes") (fromIntegral opLen)
       return $ Element bytes
     else if fstByte == 77 then do
-      opLen <- P.dbg "ELEMENT BYTES COUNT" $ P.takeP (Just "Bytes that indicate the length of the element") 2
-      bytes <- P.dbg "ELEMENT BYTES #3" $ P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
+      opLen <- P.takeP (Just "Bytes that indicate the length of the element") 2
+      bytes <- P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
       return $ Element bytes
     else if fstByte == 78 then do
-      opLen <- P.dbg "ELEMENT BYTES COUNT" $ P.takeP (Just "Bytes that indicate the length of the element") 4
-      bytes <- P.dbg "ELEMENT BYTES #4" $ P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
+      opLen <- P.takeP (Just "Bytes that indicate the length of the element") 4
+      bytes <- P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
       return $ Element bytes
     else do
       return $ OpCommand $ operationFromOpCode fstByte
@@ -402,7 +402,7 @@ instance Serializable Stack where
     -- {{{
     -- bytesCount <- Varint.countParser
     -- void Varint.countParser
-    commands <- P.dbg "S01" $ Varint.lengthPrefixed parser
+    commands <- Varint.lengthPrefixed parser
     return $ Stack commands
     -- }}}
 -- }}}

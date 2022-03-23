@@ -62,9 +62,9 @@ instance Serializable TxIn where
     -- }}}
   parser = do
     -- {{{
-    txInPrevTx     <- P.dbg "TXIN PREV TX" $ P.takeP (Just "prev tx") 32
-    txInPrevIndex  <- P.dbg "TXIN PREV INDEX" $ word32ParserLE "prev index"
-    txInScriptSig  <- P.dbg "TXIN SCRIPTSIG" parser
-    txInSequence   <- P.dbg "TXIN SEQUENCE" $ word32ParserLE "sequence"  
+    txInPrevTx     <- P.takeP (Just "prev tx") 32
+    txInPrevIndex  <- word32ParserLE "prev index"
+    txInScriptSig  <- parser
+    txInSequence   <- word32ParserLE "sequence"  
     return $ TxIn {..}
   -- }}}

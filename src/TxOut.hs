@@ -35,8 +35,8 @@ instance Serializable TxOut where
     -- }}}
   parser = do
     -- {{{
-    txOutAmount       <- P.dbg "TXOUT AMOUNT" $ fromInteger . bsToIntegerLE <$> P.takeP (Just "amount") 8
-    txOutScriptPubKey <- P.dbg "TXOUT SCRIPTPUBKEY" parser
+    txOutAmount       <- fromInteger . bsToIntegerLE <$> P.takeP (Just "amount") 8
+    txOutScriptPubKey <- parser
     return $ TxOut {..}
     -- }}}
 

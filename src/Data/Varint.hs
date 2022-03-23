@@ -85,14 +85,13 @@ countParser = fromIntegral . unVarint <$> parser
 
 -- from: https://stackoverflow.com/a/70429612
 lengthPrefixed :: Show a => Parser a -> Parser [a]
-lengthPrefixed elemParser' = do
+lengthPrefixed elemParser = do
   -- {{{
-  let elemParser = P.dbg "ELEM PARSER" elemParser'
   bytesCount <- countParser
   start <- P.getOffset
-  let finalOffset = (trace ("OFFSET START: " ++ show start) start) + bytesCount
+  let finalOffset = start + bytesCount
       checkOffset = do
         new <- P.getOffset
-        unless ((trace ("NEW OFFSET: " ++ show new) new) < (trace ("FINAL OFFSET: " ++ show finalOffset) finalOffset)) P.empty
+        unless (new < finalOffset) P.empty
   P.many (checkOffset *> elemParser)
   -- }}}
