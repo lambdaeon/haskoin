@@ -4,19 +4,19 @@
 
 
 module Script
-  ( Stack (..)
+  ( Script (..)
   , ScriptSig
   , ScriptPubKey
   , Command (..)
   , Operation (..)
   , operationFromOpCode
   , operationToOpCode
-  , sampleStack0
-  , sampleStack1
-  , sampleStack2
-  , sampleStack0BS
-  , sampleStack1BS
-  , sampleStack2BS
+  , sampleScript0
+  , sampleScript1
+  , sampleScript2
+  , sampleScript0BS
+  , sampleScript1BS
+  , sampleScript2BS
   ) where
 
 
@@ -34,57 +34,6 @@ import qualified Text.Megaparsec       as P
 import qualified Text.Megaparsec.Debug as P
 import qualified Text.Megaparsec.Byte  as BP
 import           Utils
-
-
--- COMMAND
--- {{{
-data Command
-  = Element   ByteString
-  | OpCommand Operation
-  deriving (Eq, Show)
-
-instance Serializable Command where
-  serialize (Element   bs) =
-    -- {{{
-    let
-      len   = LBS.length bs
-      lenBS = integralToBSLE len
-    in
-    if len < 76 then
-      lenBS <> bs
-    else if len >= 76 && len < 0x100 then
-      (76 `LBS.cons'` lenBS) <> bs
-    else if len >= 0x100 && len <= 520 then
-      (77 `LBS.cons'` lenBS) <> bs
-    else
-      (77 `LBS.cons'` integralToBSLE 520) <> LBS.take 520 bs
-    -- }}}
-  serialize (OpCommand op) =
-    -- {{{
-    LBS.singleton $ operationToOpCode op
-    -- }}}
-  parser = do
-    -- {{{
-    fstByte <- P.label "First byte of a script command" P.anySingle
-    if fstByte >= 1 && fstByte <= 75 then do
-      bytes <- P.takeP (Just "Element bytes") (fromIntegral fstByte)
-      return $ Element bytes
-    else if fstByte == 76 then do
-      opLen <- P.label "Byte that indicates the length of the element" P.anySingle
-      bytes <- P.takeP (Just "Element bytes") (fromIntegral opLen)
-      return $ Element bytes
-    else if fstByte == 77 then do
-      opLen <- P.takeP (Just "Bytes that indicate the length of the element") 2
-      bytes <- P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
-      return $ Element bytes
-    else if fstByte == 78 then do
-      opLen <- P.takeP (Just "Bytes that indicate the length of the element") 4
-      bytes <- P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
-      return $ Element bytes
-    else do
-      return $ OpCommand $ operationFromOpCode fstByte
-    -- }}}
--- }}}
 
 
 -- OPERATION
@@ -382,14 +331,71 @@ operationToOpCode op =
 -- }}}
 
 
--- STACK
+-- COMMAND
 -- {{{
-newtype Stack = Stack
-  { getStack :: [Command]
+data Command
+  = Element   ByteString
+  | OpCommand Operation
+  deriving (Eq, Show)
+
+instance Serializable Command where
+  serialize (Element   bs) =
+    -- {{{
+    let
+      len   = LBS.length bs
+      lenBS = integralToBSLE len
+    in
+    if len < 76 then
+      lenBS <> bs
+    else if len >= 76 && len < 0x100 then
+      (76 `LBS.cons'` lenBS) <> bs
+    else if len >= 0x100 && len <= 520 then
+      (77 `LBS.cons'` lenBS) <> bs
+    else
+      (77 `LBS.cons'` integralToBSLE 520) <> LBS.take 520 bs
+    -- }}}
+  serialize (OpCommand op) =
+    -- {{{
+    LBS.singleton $ operationToOpCode op
+    -- }}}
+  parser = do
+    -- {{{
+    fstByte <- P.label "First byte of a script command" P.anySingle
+    if fstByte >= 1 && fstByte <= 75 then do
+      bytes <- P.takeP (Just "Element bytes") (fromIntegral fstByte)
+      return $ Element bytes
+    else if fstByte == 76 then do
+      opLen <- P.label "Byte that indicates the length of the element" P.anySingle
+      bytes <- P.takeP (Just "Element bytes") (fromIntegral opLen)
+      return $ Element bytes
+    else if fstByte == 77 then do
+      opLen <- P.takeP (Just "Bytes that indicate the length of the element") 2
+      bytes <- P.takeP (Just "Element bytes") (fromIntegral $ bsToIntegerLE opLen)
+      return $ Element bytes
+    else if fstByte == 78 then do
+      opLen <- P.takeP (Just "Bytes that indicate the length of the element") 4
+      bytes <- P.takeP (Just "Element bytes") (min 520 $ fromIntegral $ bsToIntegerLE opLen)
+      return $ Element bytes
+    else do
+      return $ OpCommand $ operationFromOpCode fstByte
+    -- }}}
+-- }}}
+
+
+-- SCRIPT
+-- {{{
+newtype Script = Script
+  { getScript :: [Command]
   } deriving (Eq, Show)
 
-instance Serializable Stack where
-  serialize (Stack commands) =
+instance Semigroup Script where
+  (Script s1) <> (Script s2) = Script $ s1 <> s2
+
+instance Monoid Script where
+  mempty = Script []
+
+instance Serializable Script where
+  serialize (Script commands) =
     -- {{{
     let
       foldFn currCmd soFar = serialize currCmd <> soFar
@@ -403,50 +409,195 @@ instance Serializable Stack where
     -- bytesCount <- Varint.countParser
     -- void Varint.countParser
     commands <- Varint.lengthPrefixed parser
-    return $ Stack commands
+    return $ Script commands
     -- }}}
 -- }}}
 
 
-type ScriptSig    = Stack
-type ScriptPubKey = Stack
+type ScriptSig    = Script
+type ScriptPubKey = Script
+
+
+data Stack = Stack
+  { stackMain :: [ByteString]
+  , stackAlt  :: [ByteString]
+  } deriving (Eq, Show)
+
+
+encodeNum = signedIntegralToBSLE
+
+
+-- updateStack :: Command -> Stack -> Maybe Stack
+-- updateStack cmd stack@(Stack main alt) =
+--   -- {{{
+--   let
+--     noOp          = Just stack
+--     appendMain bs = Just $ Stack (bs : main, alt)
+--     appendAlt  bs = Just $ Stack (main, bs : alt)
+--     appendNum  x  = appendMain $ encodeNum x
+--   in
+--   case cmd of
+--     Element elemBS                   ->
+--       appendMain elemBS
+--     OpCommand OP_0                   ->
+--       appendNum 0
+--     OpCommand OP_PUSHDATA1           ->
+--       noOp
+--     OpCommand OP_PUSHDATA2           ->
+--       noOp
+--     OpCommand OP_PUSHDATA4           ->
+--       noOp
+--     OpCommand OP_1NEGATE             ->
+--       appendNum (-1)
+--     OpCommand OP_1                   ->
+--       appendNum 1
+--     OpCommand OP_2                   ->
+--       appendNum 2
+--     OpCommand OP_3                   ->
+--       appendNum 3
+--     OpCommand OP_4                   ->
+--       appendNum 4
+--     OpCommand OP_5                   ->
+--       appendNum 5
+--     OpCommand OP_6                   ->
+--       appendNum 6
+--     OpCommand OP_7                   ->
+--       appendNum 7
+--     OpCommand OP_8                   ->
+--       appendNum 8
+--     OpCommand OP_9                   ->
+--       appendNum 9
+--     OpCommand OP_10                  ->
+--       appendNum 10
+--     OpCommand OP_11                  ->
+--       appendNum 11
+--     OpCommand OP_12                  ->
+--       appendNum 12
+--     OpCommand OP_13                  ->
+--       appendNum 13
+--     OpCommand OP_14                  ->
+--       appendNum 14
+--     OpCommand OP_15                  ->
+--       appendNum 15
+--     OpCommand OP_16                  ->
+--       appendNum 16
+--     OpCommand OP_NOP                 ->
+--       noOp
+--     OpCommand OP_IF                  ->
+--       case main of
+--         [] ->
+--           faile "empty stack."
+--         headBS : rest ->
+--     OpCommand OP_NOTIF               ->
+--     OpCommand OP_ELSE                ->
+--     OpCommand OP_ENDIF               ->
+--     OpCommand OP_VERIFY              ->
+--     OpCommand OP_RETURN              ->
+--     OpCommand OP_TOALTSTACK          ->
+--     OpCommand OP_FROMALTSTACK        ->
+--     OpCommand OP_2DROP               ->
+--     OpCommand OP_2DUP                ->
+--     OpCommand OP_3DUP                ->
+--     OpCommand OP_2OVER               ->
+--     OpCommand OP_2ROT                ->
+--     OpCommand OP_2SWAP               ->
+--     OpCommand OP_IFDUP               ->
+--     OpCommand OP_DEPTH               ->
+--     OpCommand OP_DROP                ->
+--     OpCommand OP_DUP                 ->
+--     OpCommand OP_NIP                 ->
+--     OpCommand OP_OVER                ->
+--     OpCommand OP_PICK                ->
+--     OpCommand OP_ROLL                ->
+--     OpCommand OP_ROT                 ->
+--     OpCommand OP_SWAP                ->
+--     OpCommand OP_TUCK                ->
+--     OpCommand OP_SIZE                ->
+--     OpCommand OP_EQUAL               ->
+--     OpCommand OP_EQUALVERIFY         ->
+--     OpCommand OP_1ADD                ->
+--     OpCommand OP_1SUB                ->
+--     OpCommand OP_NEGATE              ->
+--     OpCommand OP_ABS                 ->
+--     OpCommand OP_NOT                 ->
+--     OpCommand OP_0NOTEQUAL           ->
+--     OpCommand OP_ADD                 ->
+--     OpCommand OP_SUB                 ->
+--     OpCommand OP_MUL                 ->
+--     OpCommand OP_BOOLAND             ->
+--     OpCommand OP_BOOLOR              ->
+--     OpCommand OP_NUMEQUAL            ->
+--     OpCommand OP_NUMEQUALVERIFY      ->
+--     OpCommand OP_NUMNOTEQUAL         ->
+--     OpCommand OP_LESSTHAN            ->
+--     OpCommand OP_GREATERTHAN         ->
+--     OpCommand OP_LESSTHANOREQUAL     ->
+--     OpCommand OP_GREATERTHANOREQUAL  ->
+--     OpCommand OP_MIN                 ->
+--     OpCommand OP_MAX                 ->
+--     OpCommand OP_WITHIN              ->
+--     OpCommand OP_RIPEMD160           ->
+--     OpCommand OP_SHA1                ->
+--     OpCommand OP_SHA256              ->
+--     OpCommand OP_HASH160             ->
+--     OpCommand OP_HASH256             ->
+--     OpCommand OP_CODESEPARATOR       ->
+--     OpCommand OP_CHECKSIG            ->
+--     OpCommand OP_CHECKSIGVERIFY      ->
+--     OpCommand OP_CHECKMULTISIG       ->
+--     OpCommand OP_CHECKMULTISIGVERIFY ->
+--     OpCommand OP_NOP1                ->
+--     OpCommand OP_CHECKLOCKTIMEVERIFY ->
+--     OpCommand OP_CHECKSEQUENCEVERIFY ->
+--     OpCommand OP_NOP4                ->
+--     OpCommand OP_NOP5                ->
+--     OpCommand OP_NOP6                ->
+--     OpCommand OP_NOP7                ->
+--     OpCommand OP_NOP8                ->
+--     OpCommand OP_NOP9                ->
+--     OpCommand OP_NOP10               ->
+--   -- }}}
+-- 
+-- 
+-- 
+-- evaluate :: Script -> Maybe Stack
+-- evaluate (Script script) =
 
 
 -- SAMPLE VALUES
 -- {{{
-sampleStack0 :: Stack
-sampleStack0 = Stack
+sampleScript0 :: Script
+sampleScript0 = Script
   [ Element $ integerToBS 0x3045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01
   , Element $ integerToBS 0x0349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
   ]
-sampleStack0BS :: ByteString
-sampleStack0BS =
+sampleScript0BS :: ByteString
+sampleScript0BS =
   integerToBS 0x6b483045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01210349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
-  --                3045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01  0349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
 
 
-sampleStack1 :: Stack
-sampleStack1 = Stack
+sampleScript1 :: Script
+sampleScript1 = Script
   [ OpCommand OP_DUP
   , OpCommand OP_HASH160
   , Element $ integerToBS 0xbc3b654dca7e56b04dca18f2566cdaf02e8d9ada
   , OpCommand OP_EQUALVERIFY
   , OpCommand OP_CHECKSIG
   ]
-sampleStack1BS :: ByteString
-sampleStack1BS =
+sampleScript1BS :: ByteString
+sampleScript1BS =
   integerToBS 0x1976a914bc3b654dca7e56b04dca18f2566cdaf02e8d9ada88ac
 
 
-sampleStack2 :: Stack
-sampleStack2 = Stack
+sampleScript2 :: Script
+sampleScript2 = Script
   [ OpCommand OP_DUP
   , OpCommand OP_HASH160
   , Element $ integerToBS 0x1c4bc762dd5423e332166702cb75f40df79fea12
   , OpCommand OP_EQUALVERIFY
   , OpCommand OP_CHECKSIG
   ]
-sampleStack2BS :: ByteString
-sampleStack2BS =
+sampleScript2BS :: ByteString
+sampleScript2BS =
   integerToBS 0x1976a9141c4bc762dd5423e332166702cb75f40df79fea1288ac
 -- }}}

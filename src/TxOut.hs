@@ -48,7 +48,7 @@ sampleTxOut1 =
   -- {{{
   let
     amount   = integralToNBytes 8 0xa135ef0100000000
-    scriptPK = Script.sampleStack1BS
+    scriptPK = Script.sampleScript1BS
   in
   amount <> scriptPK
   -- }}}
@@ -56,7 +56,7 @@ sampleTxOut2 =
   -- {{{
   let
     amount   = integralToNBytes 8 0x99c3980000000000
-    scriptPK = Script.sampleStack2BS
+    scriptPK = Script.sampleScript2BS
   in
   amount <> scriptPK
   -- }}}

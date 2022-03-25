@@ -13,7 +13,8 @@ module Tx
   , getTxLocktime
   , getTxTestnet
   , makeTx
-  , fetch
+  , fee
+  , sampleTxBS
   ) where
 -- }}}
 
@@ -21,7 +22,7 @@ module Tx
 -- IMPORTS
 -- {{{
 import           Debug.Trace                 (trace)
-import           Control.Monad               (replicateM)
+import           Control.Monad               (replicateM, forM)
 import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy        as LBS
 import qualified Data.ByteString             as BS
@@ -44,36 +45,6 @@ import qualified TxOut
 import           Utils
 -- }}}
 
-
-
--- === Tx =====
--- version:      0x01000000
---
--- txin count:   0x01
--- === TxIn ===
--- prev tx id:   0x813f79011acb80925dfe69b3def355fe914bd1d96a3f5f71bf8303c6a989c7d1
--- prev index:   0x00000000
--- script sig:   0x6b483045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01210349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
--- sequence:     0xfeffffff
---
--- txout count:  0x02
--- === TxOut ==
--- amount:       0xa135ef0100000000
--- scriptpubkey: 0x1976a914bc3b654dca7e56b04dca18f2566cdaf02e8d9ada88ac
--- txout1        0x99c39800000000001976a9141c4bc762dd5423e332166702cb75f40df79fea1288ac
---
--- locktime:     0x19430600
-
-
-sampleTx :: ByteString
-sampleTx =
-     integralToNBytes 4 0x01000000
-  <> serialize (Varint 1)
-  <> TxIn.sampleTxIn
-  <> serialize (Varint 2)
-  <> TxOut.sampleTxOut1
-  <> TxOut.sampleTxOut2
-  <> integralToNBytes 4 0x19430600
 
 
 
@@ -151,8 +122,76 @@ fetch testnet txId =
       else
         "https://blockstream.info/api/"
     url :: Request
-    url = fromString $ show $ baseEndPoint <> "tx/" <> encodeHex txId <> "/hex"
+    url = fromString $ filter (/= '\"') $ show $ baseEndPoint <> "tx/" <> encodeHex txId <> "/hex"
   in do
   response <- httpLbs url
   return $ P.runParser parser "" $ getResponseBody response
   -- }}}
+
+
+getTxInAmount :: Bool -> TxIn -> IO (Maybe Word)
+getTxInAmount testnet TxIn {..} = do
+  -- {{{
+  fetchRes <- fetch testnet txInPrevTx
+  case fetchRes of
+    Right tx ->
+      -- {{{
+      let
+        txOuts    = txTxOuts tx
+        outsCount = fromIntegral $ length txOuts
+        prevIndex = fromIntegral txInPrevIndex
+      in
+      if txInPrevIndex < outsCount - 1 then
+        return $ Just $ txOutAmount $ txOuts !! prevIndex
+      else
+        return Nothing
+      -- }}}
+    Left _ ->
+      -- {{{
+      return Nothing
+      -- }}}
+  -- }}}
+
+
+fee :: Bool -> Tx -> IO (Maybe Word)
+fee testnet Tx {..} =
+  -- {{{
+  let
+    ioMaybeWords = forM txTxIns (getTxInAmount testnet)
+  in
+  (sum <$>) . sequence <$> ioMaybeWords
+  -- }}}
+
+
+-- SAMPLE VALUE
+-- {{{
+
+-- === Tx =====
+-- version:      0x01000000
+--
+-- txin count:   0x01
+-- === TxIn ===
+-- prev tx id:   0x813f79011acb80925dfe69b3def355fe914bd1d96a3f5f71bf8303c6a989c7d1
+-- prev index:   0x00000000
+-- script sig:   0x6b483045022100ed81ff192e75a3fd2304004dcadb746fa5e24c5031ccfcf2132060277457c98f02207a986d955c6e0cb35d446a89d3f56100f4d7f67801c31967743a9c8e10615bed01210349fc4e631e3624a545de3f89f5d8684c7b8138bd94bdd531d2e213bf016b278a
+-- sequence:     0xfeffffff
+--
+-- txout count:  0x02
+-- === TxOut ==
+-- amount:       0xa135ef0100000000
+-- scriptpubkey: 0x1976a914bc3b654dca7e56b04dca18f2566cdaf02e8d9ada88ac
+-- txout1        0x99c39800000000001976a9141c4bc762dd5423e332166702cb75f40df79fea1288ac
+--
+-- locktime:     0x19430600
+
+
+sampleTxBS :: ByteString
+sampleTxBS =
+     integralToNBytes 4 0x01000000
+  <> serialize (Varint 1)
+  <> TxIn.sampleTxIn
+  <> serialize (Varint 2)
+  <> TxOut.sampleTxOut1
+  <> TxOut.sampleTxOut2
+  <> integralToNBytes 4 0x19430600
+-- }}}

@@ -12,12 +12,14 @@ import           Debug.Trace               (trace)
 import           Data.ByteString.Lazy      (ByteString)
 import qualified Data.ByteString.Lazy      as LBS
 import qualified Data.ByteString           as BS
+import           Data.Either               (isRight)
 import           Data.Function             ((&))
 import           Data.Maybe                (isJust)
 import           Data.Serializable
 import           Data.String               (fromString)
 import           Data.Varint               (Varint (..))
 import qualified Data.Varint               as Varint
+import           Data.Void
 import qualified Extension.ByteString.Lazy as LBS
 import qualified Locktime
 import           Test.Hspec
@@ -170,7 +172,7 @@ main = hspec $ do
     -- {{{
     it "DER format of the given signature was found successfully." $ do
       shouldBe
-        ( Signature.toDER $ Signature.Signature
+        ( Utils.encodeHex $ serialize $ Signature.Signature
             { Signature.r = 0x37206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c6
             , Signature.s = 0x8ca63759c1157ebeaec0d03cecca119fc9a75bf8e6d0fa65c841c8e2738cdaec
             }
@@ -287,14 +289,14 @@ main = hspec $ do
           -- }}}
         scriptSigAns =
           -- {{{
-          Just $ Script.Stack
+          Just $ Script.Script
             [ Script.Element $ Utils.integralToBS 0x304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a71601
             , Script.Element $ Utils.integralToBS 0x035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937
             ]
           -- }}}
         scriptPubKeyAns =
           -- {{{
-          Just $ Script.Stack
+          Just $ Script.Script
             [ Script.OpCommand Script.OP_DUP
             , Script.OpCommand Script.OP_HASH160
             , Script.Element $ Utils.integralToBS 0xab0c0b2e98b1ab6dbf67d4750b0a56244948a879
@@ -313,23 +315,47 @@ main = hspec $ do
 
   describe "\nChapter 6 - Exercise Mine01" $ do
     -- {{{
-    let ser0    = serialize Script.sampleStack0
-        target0 = Script.sampleStack0BS
-        ser1    = serialize Script.sampleStack1
-        target1 = Script.sampleStack1BS
-        ser2    = serialize Script.sampleStack2
-        target2 = Script.sampleStack2BS
+    let ser0    = serialize Script.sampleScript0
+        target0 = Script.sampleScript0BS
+        ser1    = serialize Script.sampleScript1
+        target1 = Script.sampleScript1BS
+        ser2    = serialize Script.sampleScript2
+        target2 = Script.sampleScript2BS
     it "Script sample 0 serialized correctly." $ do
       ser0 `shouldBe` target0
     it "Script sample 0 parsed correctly." $ do
-      P.runParser parser "" target0 `shouldParse` Script.sampleStack0
+      P.runParser parser "" target0 `shouldParse` Script.sampleScript0
     it "Script sample 1 serialized correctly." $ do
       ser1 `shouldBe` target1
     it "Script sample 1 parsed correctly." $ do
-      P.runParser parser "" target1 `shouldParse` Script.sampleStack1
+      P.runParser parser "" target1 `shouldParse` Script.sampleScript1
     it "Script sample 2 serialized correctly." $ do
       ser2 `shouldBe` target2
     it "Script sample 2 parsed correctly." $ do
-      P.runParser parser "" target2 `shouldParse` Script.sampleStack2
+      P.runParser parser "" target2 `shouldParse` Script.sampleScript2
+    -- }}}
+
+  describe "\nChapter 6 - Exercise Mine02" $ do
+    -- {{{
+    let parseRes :: Either (P.ParseErrorBundle ByteString Void) Tx.Tx
+        parseRes = P.runParser parser "" Tx.sampleTxBS
+    it "Transaction sample parsed correctly." $ do
+      (isRight parseRes) `shouldBe` True
+    -- }}}
+
+  describe "\nChapter 6 - Exercise Mine03" $ do
+    -- {{{
+    let int0, int1, int2 :: Integer
+        int0 = (-2002)
+        int1 = (-0xdeadbeef)
+        int2 = 0
+        fn0 = Utils.bsToSignedIntegralLE . Utils.signedIntegralToBSLE
+        fn1 = Utils.bsToSignedIntegral . Utils.signedIntegralToBS
+    it "Successfully encoded and decoded back -2002." $ do
+      fn0 int0 `shouldBe` int0
+    it "Successfully encoded and decoded back -0xdeadbeef." $ do
+      (fn0 int1 + fn1 int1) `shouldBe` (2 * int1)
+    it "Successfully encoded and decoded back 0." $ do
+      fn0 int2 `shouldBe` int2
     -- }}}
 

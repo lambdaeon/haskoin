@@ -11,10 +11,14 @@ module Utils
   , toBase58WithChecksum
   , bsToInteger
   , bsToIntegerLE
+  , bsToSignedIntegral
+  , bsToSignedIntegralLE
   , integerToBS
   , integerToBSLE
   , integralToBS
   , integralToBSLE
+  , signedIntegralToBS
+  , signedIntegralToBSLE
   , integralToNBytes
   , integralToNBytesLE
   , integralTo32Bytes
@@ -142,6 +146,47 @@ bsToIntegerHelper be =
   -- }}}
 
 
+bsToSignedIntegralHelper :: Integral a => Bool -> ByteString -> a
+bsToSignedIntegralHelper be bs
+  -- {{{
+  | LBS.null bs = 0
+  | otherwise   =
+      let
+        (tier1, revIfLE, fn) =
+          -- {{{
+          if be then
+            -- {{{
+            (bs, id, fromInteger . bsToInteger)
+            -- }}}
+          else
+            -- {{{
+            (LBS.reverse bs, LBS.reverse, fromInteger . bsToIntegerLE)
+            -- }}}
+          -- }}}
+        (bytes, negMult) =
+          -- {{{
+          case LBS.unpack tier1 of
+            fstByte : rest ->
+              -- {{{
+              if fstByte .&. 0x80 == 0x80 then
+                ( revIfLE $ LBS.pack $ (fstByte .&. 0x7f) : rest
+                , ((-1) *)
+                )
+              else
+                (revIfLE bs, id)
+              -- }}}
+            _ ->
+              -- {{{
+              (revIfLE bs, id)
+              -- }}}
+          -- }}}
+      in
+      negMult $ fn bytes
+  -- }}}
+bsToSignedIntegral   = bsToSignedIntegralHelper True
+bsToSignedIntegralLE = bsToSignedIntegralHelper False
+
+
 integerToBS :: Integer -> ByteString
 integerToBS =
   -- {{{
@@ -172,6 +217,64 @@ integerToBSHelper be i
       LBS.pack [0]
       -- }}}
   -- }}}
+
+
+signedIntegralToBSHelper :: Integral a => Bool -> a -> ByteString
+signedIntegralToBSHelper be i_
+  -- {{{
+  | i_ == 0   = LBS.empty
+  | otherwise =
+      let
+        i     = abs i_
+        isNeg = i_ < 0
+        (tier1, addAsBiggestByte, getBiggestByte, switchOnBiggestByte) =
+          if be then
+            -- {{{
+            ( integralToBS i
+            , LBS.cons'
+            , LBS.head
+            , \bs ->
+                case LBS.unpack bs of
+                  biggest : rest -> LBS.pack $ (biggest .|. 0x80) : rest
+                  _              -> bs
+            )
+            -- }}}
+          else
+            -- {{{
+            ( integralToBSLE i
+            , flip LBS.snoc
+            , LBS.last
+            , \bs ->
+                case LBS.unpack (LBS.reverse bs) of
+                  biggest : rest -> LBS.reverse $ LBS.pack $ (biggest .|. 0x80) : rest
+                  _              -> bs
+            )
+            -- }}}
+      in
+      if (getBiggestByte tier1 .&. 0x80) == 0x80 then
+        -- {{{
+        if isNeg then
+          0x80 `addAsBiggestByte` tier1
+        else
+          0x00 `addAsBiggestByte` tier1
+        -- }}}
+      else if isNeg then
+        -- {{{
+        switchOnBiggestByte tier1
+        -- }}}
+      else
+        -- {{{
+        tier1
+        -- }}}
+  -- }}}
+
+
+signedIntegralToBS :: Integral a => a -> ByteString
+signedIntegralToBS = signedIntegralToBSHelper True
+
+
+signedIntegralToBSLE :: Integral a => a -> ByteString
+signedIntegralToBSLE = signedIntegralToBSHelper False
 
 
 encodeHex :: ByteString -> ByteString
@@ -246,7 +349,7 @@ base16StringToBS b16 =
 prependIntegerWithWord8 :: Maybe Word8 -> Integer -> ByteString
 prependIntegerWithWord8 mW8 n =
   -- {{{
-  maybe LBS.empty (LBS.pack . (: [])) mW8 <> integerToBS n
+  maybe LBS.empty LBS.singleton mW8 <> integerToBS n
   -- }}}
 
 

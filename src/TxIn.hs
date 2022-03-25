@@ -29,7 +29,7 @@ sampleTxIn =
   let
     prevTx    = integerToBS 0x813f79011acb80925dfe69b3def355fe914bd1d96a3f5f71bf8303c6a989c7d1
     prevIndex = integralToNBytes 4 0x00000000
-    scriptSig = Script.sampleStack0BS
+    scriptSig = Script.sampleScript0BS
     sequence  = integralToNBytes 4 0xfeffffff
   in
   prevTx <> prevIndex <> scriptSig <> sequence
@@ -68,3 +68,5 @@ instance Serializable TxIn where
     txInSequence   <- word32ParserLE "sequence"  
     return $ TxIn {..}
   -- }}}
+
+
