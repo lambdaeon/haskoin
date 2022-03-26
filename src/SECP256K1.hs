@@ -13,6 +13,10 @@ module SECP256K1
   , verify
   , signWith
   , testnetWallet
+  , PubKey
+  , SecKey
+  , Message
+  , Nonce
   ) where
 
 

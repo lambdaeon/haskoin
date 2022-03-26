@@ -8,34 +8,35 @@
 module Main where
 
 
-import           Debug.Trace               (trace)
-import           Data.ByteString.Lazy      (ByteString)
-import qualified Data.ByteString.Lazy      as LBS
-import qualified Data.ByteString           as BS
-import           Data.Either               (isRight)
-import           Data.Function             ((&))
-import           Data.Maybe                (isJust)
+import           Debug.Trace                 (trace)
+import           Data.ByteString.Lazy        (ByteString)
+import qualified Data.ByteString.Lazy        as LBS
+import qualified Data.ByteString             as BS
+import           Data.Either                 (isRight)
+import           Data.Function               ((&))
+import           Data.Maybe                  (isJust)
 import           Data.Serializable
-import           Data.String               (fromString)
-import           Data.Varint               (Varint (..))
-import qualified Data.Varint               as Varint
+import           Data.String                 (fromString)
+import           Data.Varint                 (Varint (..))
+import qualified Data.Varint                 as Varint
 import           Data.Void
-import qualified Extension.ByteString.Lazy as LBS
+import qualified Extension.ByteString.Lazy   as LBS
+import           Extension.ByteString.Parser
 import qualified Locktime
 import           Test.Hspec
 import           Test.Hspec.Megaparsec
-import qualified FieldElement              as FE
-import qualified EllipticCurve             as EC
-import qualified FiniteFieldEllipticCurve  as FFEC
+import qualified FieldElement                as FE
+import qualified EllipticCurve               as EC
+import qualified FiniteFieldEllipticCurve    as FFEC
 import qualified Script
 import qualified SECP256K1
-import qualified SECP256K1.S256Point       as S256Point
-import qualified SECP256K1.Signature       as Signature
-import qualified Text.Megaparsec           as P
+import qualified SECP256K1.S256Point         as S256Point
+import qualified SECP256K1.Signature         as Signature
+import qualified Text.Megaparsec             as P
 import qualified Tx
 import qualified TxIn
 import qualified TxOut
-import qualified Utils                     as Utils
+import qualified Utils                       as Utils
 
 main :: IO ()
 main = hspec $ do
@@ -337,7 +338,7 @@ main = hspec $ do
 
   describe "\nChapter 6 - Exercise Mine02" $ do
     -- {{{
-    let parseRes :: Either (P.ParseErrorBundle ByteString Void) Tx.Tx
+    let parseRes :: ParseResult Tx.Tx
         parseRes = P.runParser parser "" Tx.sampleTxBS
     it "Transaction sample parsed correctly." $ do
       (isRight parseRes) `shouldBe` True
@@ -357,5 +358,53 @@ main = hspec $ do
       (fn0 int1 + fn1 int1) `shouldBe` (2 * int1)
     it "Successfully encoded and decoded back 0." $ do
       fn0 int2 `shouldBe` int2
+    -- }}}
+
+  describe "\nChapter 6 - Exercise 3" $ do
+    -- {{{
+    let parseRes :: ParseResult Script.ScriptPubKey
+        parseRes = P.runParser parser "" $ Utils.integerToBS 0x767695935687
+        givenScriptPubKey :: Script.ScriptPubKey
+        givenScriptPubKey = Script.Script $ fmap Script.OpCommand
+          [ Script.OP_DUP
+          , Script.OP_MUL
+          , Script.OP_ADD
+          , Script.OP_6
+          , Script.OP_EQUAL
+          ]
+        validScriptSig :: Script.ScriptSig
+        validScriptSig = Script.Script
+          [ Script.Element $ LBS.singleton 2
+          , Script.Element $ LBS.singleton 2
+          ]
+    it "Correctly parsed the serialized ScriptPubKey." $ do
+      parseRes `shouldParse` givenScriptPubKey
+    it "[Element 2, Element 2] is a valid ScriptSig." $ do
+      Script.validate validScriptSig givenScriptPubKey Nothing `shouldBe` True
+    -- }}}
+
+  describe "\nChapter 6 - Exercise 4" $ do
+    -- {{{
+    let bsLength = serialize $ Varint.Varint 8
+        initBS   = Utils.integerToBS 0x6e879169a77ca787
+        parseRes :: ParseResult Script.Script
+        parseRes = P.runParser parser "" $ bsLength <> initBS
+        ans' =
+          Script.Script $ fmap
+            (Script.OpCommand . Script.operationFromOpCode)
+            [0x6e, 0x87, 0x91, 0x69, 0xa7, 0x7c, 0xa7, 0x87]
+        ans = trace (show ans') ans'
+    it "Correctly parsed the serialized script." $ do
+      parseRes `shouldParse` ans
+    -- from trace log:
+    -- [ OP_2DUP
+    -- , OP_EQUAL
+    -- , OP_NOT
+    -- , OP_VERIFY
+    -- , OP_SHA1
+    -- , OP_SWAP
+    -- , OP_SHA1
+    -- , OP_EQUAL
+    -- ]
     -- }}}
 

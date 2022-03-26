@@ -25,6 +25,9 @@ module Utils
   , integralTo32BytesLE
   , base16StringToBS
   , prependIntegerWithWord8
+  , sha1
+  , sha256
+  , ripemd160
   , hash160
   , hash256
   ) where
@@ -34,7 +37,7 @@ module Utils
 -- IMPORTS
 -- {{{
 import           Debug.Trace                 (trace)
-import           Crypto.Hash                 (hashWith, SHA256 (..), RIPEMD160 (..))
+import           Crypto.Hash                 (hashWith, SHA1 (..), SHA256 (..), RIPEMD160 (..))
 import qualified Data.Binary                 as Bin
 import           Data.Bits
 import qualified Data.ByteArray              as BA
@@ -183,7 +186,9 @@ bsToSignedIntegralHelper be bs
       in
       negMult $ fn bytes
   -- }}}
+bsToSignedIntegral :: Integral a => ByteString -> a
 bsToSignedIntegral   = bsToSignedIntegralHelper True
+bsToSignedIntegralLE :: Integral a => ByteString -> a
 bsToSignedIntegralLE = bsToSignedIntegralHelper False
 
 
@@ -350,6 +355,26 @@ prependIntegerWithWord8 :: Maybe Word8 -> Integer -> ByteString
 prependIntegerWithWord8 mW8 n =
   -- {{{
   maybe LBS.empty LBS.singleton mW8 <> integerToBS n
+  -- }}}
+
+
+sha1 :: ByteString -> ByteString
+sha1 =
+  -- {{{
+  LBS.fromStrict . BA.convert . hashWith SHA1 . LBS.toStrict
+  -- }}}
+
+
+sha256 :: ByteString -> ByteString
+sha256 =
+  -- {{{
+  LBS.fromStrict . BA.convert . hashWith SHA256 . LBS.toStrict
+  -- }}}
+
+ripemd160 :: ByteString -> ByteString
+ripemd160 =
+  -- {{{
+  LBS.fromStrict . BA.convert . hashWith RIPEMD160 . LBS.toStrict
   -- }}}
 
 

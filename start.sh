@@ -79,6 +79,11 @@ case $1 in
     runStackTest $2 $3
     ;;
     # }}}
+  noLint)
+    # {{{
+    copyFiles
+    ;;
+    # }}}
   *)
     # {{{
     lintAndCopy

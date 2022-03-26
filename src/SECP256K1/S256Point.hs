@@ -12,7 +12,10 @@ import qualified FieldElement                as FE
 import qualified FiniteFieldEllipticCurve    as FFEC
 import qualified Data.ByteString.Lazy        as LBS
 import           Data.ByteString.Lazy        (ByteString)
+import           Data.Proxy
 import qualified Data.String                 as String
+import           Extension.ByteString.Parser  
+import           GHC.TypeLits
 import           SECP256K1.Constants
 import           SECP256K1.S256Field         hiding (sqrt)
 import qualified SECP256K1.S256Field         as S256Field
@@ -24,6 +27,10 @@ type S256Point =
   FFEC.Point 115792089237316195423570985008687907853269984665640564039457584007908834671663
              0
              7
+
+a, b :: Integer
+a = 0
+b = 7
 
 
 gx :: S256Field
@@ -61,11 +68,7 @@ secParser = do
   x       <- fromInteger . bsToInteger <$> P.takeP (Just "x bytes") 32
   let yFromX x =
         -- {{{
-        let
-          a = fromInteger $ natVal (Proxy :: Proxy a)
-          b = fromInteger $ natVal (Proxy :: Proxy b)
-        in
-        S256Field.sqrt $ x ^ 3 + a * x + b
+        S256Field.sqrt $ x ^ 3 + fromInteger a * x + fromInteger b
         -- }}}
       fromXY x' y' =
         -- {{{
@@ -77,13 +80,13 @@ secParser = do
         -- }}}
   if fstByte == 0x02 then do
     -- {{{
-    let initY = findInitY x
+    let initY = yFromX x
         y = if even initY then initY else (-initY)
     fromXY x y
     -- }}}
   else if fstByte == 0x03 then do
     -- {{{
-    let initY = findInitY x
+    let initY = yFromX x
         y = if even initY then (-initY) else initY
     fromXY x y
     -- }}}

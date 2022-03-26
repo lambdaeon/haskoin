@@ -11,7 +11,8 @@ import qualified Text.Megaparsec.Byte as BP
 import           Utils
 
 
-type Parser  = Parsec Void ByteString
+type Parser      = Parsec Void ByteString
+type ParseResult = Either (P.ParseErrorBundle ByteString Void)
 
 
 word32ParserLE :: String -> Parser Word32

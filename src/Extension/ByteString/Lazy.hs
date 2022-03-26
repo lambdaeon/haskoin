@@ -2,11 +2,15 @@ module Extension.ByteString.Lazy
   ( invForBE
   , invForLE
   , chunksOf
+  , safeLast
+  , safeInit
   ) where
 
 
-import Data.Memory.Endian (getSystemEndianness, Endianness (..))
 import Data.ByteString.Lazy as LBS
+import Data.Memory.Endian      (getSystemEndianness, Endianness (..))
+import Data.Word               (Word8)
+
 
 
 invForBE :: ByteString -> ByteString
@@ -47,3 +51,26 @@ chunksOf i bs =
   in
   fmap (LBS.pack . Prelude.take i) (build (splitter ls))
   -- }}}
+
+
+safeLast :: ByteString -> Maybe Word8
+safeLast bs =
+  -- {{{
+  if LBS.length bs <= 0 then
+    Nothing
+  else
+    Just $ LBS.last bs
+  -- }}}
+
+
+safeInit :: ByteString -> Maybe ByteString
+safeInit bs =
+  -- {{{
+  if LBS.length bs <= 0 then
+    Nothing
+  else
+    Just $ LBS.init bs
+  -- }}}
+
+
+

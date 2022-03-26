@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE KindSignatures      #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections       #-}
 
 
 module Script
@@ -11,6 +12,7 @@ module Script
   , Operation (..)
   , operationFromOpCode
   , operationToOpCode
+  , validate
   , sampleScript0
   , sampleScript1
   , sampleScript2
@@ -20,20 +22,25 @@ module Script
   ) where
 
 
-import           Data.ByteString.Lazy  (ByteString)
-import qualified Data.ByteString.Lazy  as LBS
-import           Data.Functor          (void)
+import           Data.ByteString.Lazy      (ByteString)
+import qualified Data.ByteString.Lazy      as LBS
+import           Data.Functor              (void)
+import           Data.Maybe                (isJust, fromMaybe)
 import           Data.Serializable
-import           Data.Varint           (Varint (..))
-import qualified Data.Varint           as Varint
+import           Data.Varint               (Varint (..))
+import qualified Data.Varint               as Varint
 import           Data.Void
-import           Data.Word             (Word8)
-import qualified FieldElement          as FE
-import           Text.Megaparsec       (Parsec)
-import qualified Text.Megaparsec       as P
-import qualified Text.Megaparsec.Debug as P
-import qualified Text.Megaparsec.Byte  as BP
+import           Data.Word                 (Word8)
+import qualified Extension.ByteString.Lazy as LBS
+import qualified FieldElement              as FE
+import           Text.Megaparsec           (Parsec)
+import qualified Text.Megaparsec           as P
+import qualified Text.Megaparsec.Debug     as P
+import qualified Text.Megaparsec.Byte      as BP
 import           Utils
+import           SECP256K1.S256Point
+import           SECP256K1.Signature
+import qualified SECP256K1
 
 
 -- OPERATION
@@ -229,7 +236,7 @@ operationFromOpCode opCode =
     183 -> OP_NOP8
     184 -> OP_NOP9
     185 -> OP_NOP10
-    _   -> OP_NOP
+    _   -> OP_RETURN
   -- }}}
 
 operationToOpCode :: Operation -> Word8
@@ -423,145 +430,830 @@ data Stack = Stack
   , stackAlt  :: [ByteString]
   } deriving (Eq, Show)
 
+emptyStack = Stack [] []
 
+
+validate :: ScriptSig -> ScriptPubKey -> Maybe ByteString -> Bool
+validate scriptSig scriptPubKey mZ = --   ^--------------^ probably temporary...
+  -- ScriptSig should stack on top of ScriptPubKey.
+  isJust $
+    updateStack
+      (scriptSig <> scriptPubKey)
+      (fromMaybe LBS.empty mZ)
+      emptyStack
+
+
+-- Reading guide for stacks:
+-- from top ------------------> to bottom
+-- top3 : top2 : top1 : ... : restOfStack
+--
+-- Operations where "falsiness" is determined rather than
+-- being 0 (unlike the bitcoin's wiki, and like the book's
+-- codebase):
+--   - OP_IFDUP
+--   - OP_NOT
+--   - OP_0NOTEQUAL
+--   - OP_BOOLAND
+--   - OP_BOOLOR
+--
+updateStack :: Script -> ByteString -> Stack -> Maybe Stack
+updateStack (Script script) z stack@(Stack main alt) =
+  -- {{{
+  let
+    noOp           rest = updateStack (Script rest) z   stack
+    appendMain bs  rest = updateStack (Script rest) z $ Stack (bs : main) alt
+    appendAlt  bs  rest = updateStack (Script rest) z $ Stack main (bs : alt)
+    appendNum  x        = appendMain (encodeNum x)
+    genericFail         = fail "invalid script."
+    opOnHead    op rest =
+      -- {{{
+      case main of
+        h : t ->
+          updateStack (Script rest) z $ Stack (op h : t) alt
+        _ ->
+          genericFail
+      -- }}}
+    opOnHead2   op rest =
+      -- {{{
+      case main of
+        h2 : h1 : t ->
+          updateStack (Script rest) z $ Stack (op h2 h1 : t) alt
+        _ ->
+          genericFail
+      -- }}}
+    opOnNum     op rest =
+      -- {{{
+      opOnHead (encodeNum . op . decodeNum) rest
+      -- }}}
+    opOnTwoNums op rest =
+      -- {{{
+      opOnHead2 -- v-- b is the topmost element.
+        (\b a -> encodeNum $ decodeNum a `op` decodeNum b)
+        rest
+      -- }}}
+    compTwoNums pred rest =
+      -- {{{
+      opOnHead2
+        ( \b a -> -- b is the topmost element.
+            if decodeNum a `pred` decodeNum b then
+              LBS.singleton 1
+            else
+              LBS.singleton 0
+        )
+        rest
+      -- }}}
+    performAndVerify fstCmd rest = do
+      -- {{{
+      newStack <- updateStack (Script $ OpCommand fstCmd : rest) z stack
+      updateStack
+        (Script $ OpCommand OP_VERIFY : rest)
+        z
+        newStack
+      -- }}}
+  in
+  case script of
+    []                                      ->
+      Just stack
+    Element elemBS                   : cmds ->
+      appendMain elemBS cmds
+    OpCommand OP_0                   : cmds ->
+      appendNum 0 cmds
+    OpCommand OP_PUSHDATA1           : cmds ->
+      noOp cmds
+    OpCommand OP_PUSHDATA2           : cmds ->
+      noOp cmds
+    OpCommand OP_PUSHDATA4           : cmds ->
+      noOp cmds
+    OpCommand OP_1NEGATE             : cmds ->
+      appendNum (-1) cmds
+    OpCommand OP_1                   : cmds ->
+      appendNum 1 cmds
+    OpCommand OP_2                   : cmds ->
+      appendNum 2 cmds
+    OpCommand OP_3                   : cmds ->
+      appendNum 3 cmds
+    OpCommand OP_4                   : cmds ->
+      appendNum 4 cmds
+    OpCommand OP_5                   : cmds ->
+      appendNum 5 cmds
+    OpCommand OP_6                   : cmds ->
+      appendNum 6 cmds
+    OpCommand OP_7                   : cmds ->
+      appendNum 7 cmds
+    OpCommand OP_8                   : cmds ->
+      appendNum 8 cmds
+    OpCommand OP_9                   : cmds ->
+      appendNum 9 cmds
+    OpCommand OP_10                  : cmds ->
+      appendNum 10 cmds
+    OpCommand OP_11                  : cmds ->
+      appendNum 11 cmds
+    OpCommand OP_12                  : cmds ->
+      appendNum 12 cmds
+    OpCommand OP_13                  : cmds ->
+      appendNum 13 cmds
+    OpCommand OP_14                  : cmds ->
+      appendNum 14 cmds
+    OpCommand OP_15                  : cmds ->
+      appendNum 15 cmds
+    OpCommand OP_16                  : cmds ->
+      appendNum 16 cmds
+    OpCommand OP_NOP                 : cmds ->
+      noOp cmds
+    OpCommand OP_IF                  : cmds ->
+      -- {{{
+      case main of
+        [] ->
+          -- {{{
+          fail "empty stack."
+          -- }}}
+        headBS : restOfMain ->
+          -- {{{
+          let
+            endOfGo restOfCmds accedInReverse =
+              -- {{{
+              fmap
+                (Script restOfCmds,)
+                ( updateStack
+                    (Script $ reverse accedInReverse)
+                    z
+                    (Stack restOfMain alt)
+                )
+              -- }}}
+          in
+          if bsIsFalse headBS then
+            -- Skip to the corresponding OP_ELSE or OP_ENDIF:
+            -- {{{
+            let
+              go :: Word -> Bool -> [Command] -> [Command] -> Maybe (Script, Stack)
+              go nestLevel inElse acc remainingCmds =
+              -- Seek for OP_ELSE or OP_ENDIF.
+              -- In case of OP_ELSE, accumulate
+              -- the commands up until its OP_ENDIF.
+              -- {{{
+                case remainingCmds of
+                  [] ->
+                    -- {{{
+                    fail "if block without closure."
+                    -- }}}
+                  currCmd : restOfCmds ->
+                    -- {{{
+                    let
+                      nestLevelHelper op =
+                        -- {{{
+                        go
+                          (nestLevel `op` 1)
+                          inElse
+                          ( if inElse then
+                              currCmd : acc
+                            else
+                              acc
+                          )
+                          restOfCmds
+                        -- }}}
+                      increaseNestLevel = nestLevelHelper (+)
+                      decreaseNestLevel = nestLevelHelper (-)
+                      continue          = nestLevelHelper const
+                    in
+                    case currCmd of
+                      OpCommand OP_IF    ->
+                        -- {{{
+                        increaseNestLevel
+                        -- }}}
+                      OpCommand OP_NOTIF ->
+                        -- {{{
+                        increaseNestLevel
+                        -- }}}
+                      OpCommand OP_ELSE  ->
+                        -- {{{
+                        if nestLevel == 0 then
+                          -- {{{
+                          if inElse then
+                            -- {{{
+                            fail "if block without closure."
+                            -- }}}
+                          else
+                            -- {{{
+                            go nestLevel True acc restOfCmds
+                            -- }}}
+                          -- }}}
+                        else
+                          -- {{{
+                          decreaseNestLevel
+                          -- }}}
+                        -- }}}
+                      OpCommand OP_ENDIF ->
+                        -- {{{
+                        if nestLevel == 0 then
+                          -- {{{
+                          if inElse then
+                            -- {{{
+                            endOfGo restOfCmds acc
+                            -- }}}
+                          else
+                            -- {{{
+                            Just (Script restOfCmds, Stack restOfMain alt)
+                            -- }}}
+                          -- }}}
+                        else
+                          -- {{{
+                          decreaseNestLevel
+                          -- }}}
+                        -- }}}
+                      _                  ->
+                        -- {{{
+                        continue
+                        -- }}}
+                    -- }}}
+              -- }}}
+            in
+            case go 0 False [] cmds of
+              Nothing ->
+                fail "invalid conditional."
+              Just (newScript, newStack) ->
+                updateStack newScript z newStack
+            -- }}}
+          else
+            -- Accumulate up until the corresponding OP_ELSE or OP_ENDIF:
+            -- {{{
+            let
+              go :: Word -> [Command] -> [Command] -> Maybe (Script, Stack)
+              go nestLevel acc remainingCmds =
+              -- Keep accumulating up until an
+              -- OP_ELSE or OP_ENDIF is found.
+              -- {{{
+                case remainingCmds of
+                  [] ->
+                    -- {{{
+                    fail "if block without closure."
+                    -- }}}
+                  currCmd : restOfCmds ->
+                    -- {{{
+                    let
+                      nestLevelHelper op =
+                        -- {{{
+                        go
+                          (nestLevel `op` 1)
+                          (currCmd : acc)
+                          restOfCmds
+                        -- }}}
+                      increaseNestLevel = nestLevelHelper (+)
+                      decreaseNestLevel = nestLevelHelper (-)
+                      continue          = nestLevelHelper const
+                      endRecursion      = endOfGo restOfCmds acc
+                    in
+                    case currCmd of
+                      OpCommand OP_IF    ->
+                        -- {{{
+                        increaseNestLevel
+                        -- }}}
+                      OpCommand OP_NOTIF ->
+                        -- {{{
+                        increaseNestLevel
+                        -- }}}
+                      OpCommand OP_ELSE  ->
+                        -- {{{
+                        if nestLevel == 0 then
+                          -- {{{
+                          endRecursion
+                          -- }}}
+                        else
+                          -- {{{
+                          decreaseNestLevel
+                          -- }}}
+                        -- }}}
+                      OpCommand OP_ENDIF ->
+                        -- {{{
+                        if nestLevel == 0 then
+                          -- {{{
+                          endRecursion
+                          -- }}}
+                        else
+                          -- {{{
+                          decreaseNestLevel
+                          -- }}}
+                        -- }}}
+                      _                  ->
+                        -- {{{
+                        continue
+                        -- }}}
+                    -- }}}
+              -- }}}
+            in
+            case go 0 [] cmds of
+              Nothing ->
+                fail "invalid conditional."
+              Just (newScript, newStack) ->
+                updateStack newScript z newStack
+            -- }}}
+          -- }}}
+      -- }}}
+    OpCommand OP_NOTIF               : cmds ->
+      -- {{{
+      case main of
+        [] ->
+          -- {{{
+          fail "empty stack."
+          -- }}}
+        headBS : restOfMain ->
+          -- {{{
+          updateStack
+            (Script $ OpCommand OP_IF : cmds)
+            z
+            (Stack (bsBooleanToggle headBS : restOfMain) alt)
+          -- }}}
+      -- }}}
+    OpCommand OP_ELSE                : cmds ->
+      genericFail
+    OpCommand OP_ENDIF               : cmds ->
+      genericFail
+    OpCommand OP_VERIFY              : cmds ->
+      -- {{{
+      case main of
+        []            ->
+          genericFail
+        headBS : restOfMain ->
+          if bsIsFalse headBS then
+            genericFail
+          else
+            updateStack (Script cmds) z (Stack restOfMain alt)
+      -- }}}
+    OpCommand OP_RETURN              : cmds ->
+      fail "op_return, or invalid command."
+    OpCommand OP_TOALTSTACK          : cmds ->
+      -- {{{
+      case main of
+        [] ->
+          fail "empty stack."
+        mainHead : restOfMain ->
+          updateStack (Script cmds) z (Stack restOfMain (mainHead : alt))
+      -- }}}
+    OpCommand OP_FROMALTSTACK        : cmds ->
+      -- {{{
+      case alt of
+        [] ->
+          fail "empty alt stack."
+        altHead : restOfAlt ->
+          updateStack (Script cmds) z (Stack (altHead : main) restOfAlt)
+      -- }}}
+    OpCommand OP_2DROP               : cmds ->
+      -- {{{
+      case main of
+        _ : _ : restOfMain ->
+          updateStack (Script cmds) z (Stack restOfMain alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_2DUP                : cmds ->
+      -- {{{
+      case main of
+        head2 : head1 : _ ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack (head2 : head1 : main) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_3DUP                : cmds ->
+      -- {{{
+      case main of
+        head3 : head2 : head1 : _ ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack (head3 : head2 : head1 : main) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_2OVER               : cmds ->
+      -- {{{
+      case main of
+        _ : _ : head2 : head1 : _ ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack (head2 : head1 : main) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_2ROT                : cmds ->
+      -- {{{
+      case main of
+        head6 : head5 : head4 : head3 : head2 : head1 : restOfMain ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack (head2 : head1 : head6 : head5 : head4 : head3 : restOfMain) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_2SWAP               : cmds ->
+      -- {{{
+      case main of
+        head4 : head3 : head2 : head1 : restOfMain ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack (head2 : head1 : head4 : head3 : restOfMain) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_IFDUP               : cmds ->
+      -- {{{
+      case main of
+        head1 : _ ->
+          if bsIsFalse head1 then
+            -- From the bitcoin wiki:
+            -- ``` If the top stack value is not 0, duplicate it.
+            -- ```
+            -- Although I've decided to follow the book and used
+            -- "falsiness" as the predicate.
+            noOp cmds
+          else
+            updateStack
+              (Script cmds)
+              z
+              (Stack (head1 : main) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_DEPTH               : cmds ->
+      -- {{{
+      appendNum (length main) cmds
+      -- }}}
+    OpCommand OP_DROP                : cmds ->
+      -- {{{
+      case main of
+        _ : restOfMain ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack restOfMain alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_DUP                 : cmds ->
+      -- {{{
+      case main of
+        head1 : _ ->
+          appendMain head1 cmds
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_NIP                 : cmds ->
+      -- {{{
+      case main of
+        head2 : _ : restOfMain ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack (head2 : restOfMain) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_OVER                : cmds ->
+      -- {{{
+      case main of
+        _ : head1 : _ ->
+          appendMain head1 cmds
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_PICK                : cmds ->
+      -- {{{
+      case main of
+        head1 : restOfMain ->
+          let
+            n = bsToSignedIntegralLE head1
+          in
+          if length restOfMain < n + 1 then
+            genericFail
+          else
+            appendMain (restOfMain !! n) cmds
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_ROLL                : cmds ->
+      -- {{{
+      case main of
+        head1 : restOfMain ->
+          let
+            n = bsToSignedIntegralLE head1
+          in
+          if n == 0 then
+            noOp cmds
+          else if length restOfMain < n + 1 || n < 0 then
+            genericFail
+          else
+            let
+              -- length firstN == n
+              (firstN, restOfMain') = splitAt n restOfMain
+            in
+            updateStack
+              (Script cmds)
+              z
+              (Stack (take (n - 1) firstN ++ restOfMain') alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_ROT                 : cmds ->
+      -- {{{
+      case main of
+        head3 : head2 : head1 : restOfMain ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack (head1 : head3 : head2 : restOfMain) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_SWAP                : cmds ->
+      -- {{{
+      case main of
+        head2 : head1 : restOfMain ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack (head1 : head2 : restOfMain) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_TUCK                : cmds ->
+      -- {{{
+      case main of
+        head2 : head1 : restOfMain ->
+          updateStack
+            (Script cmds)
+            z
+            (Stack (head2 : head1 : head2 : restOfMain) alt)
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_SIZE                : cmds ->
+      -- {{{
+      case main of
+        head1 : _ ->
+          appendNum (LBS.length head1) cmds
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_EQUAL               : cmds ->
+      -- {{{
+      opOnHead2
+        ( \h2 h1 ->
+            if h2 == h1 then
+              LBS.singleton 1
+            else
+              LBS.singleton 0
+        )
+        cmds
+      -- }}}
+    OpCommand OP_EQUALVERIFY         : cmds ->
+      -- {{{
+      performAndVerify OP_EQUAL cmds
+      -- }}}
+    OpCommand OP_1ADD                : cmds ->
+      -- {{{
+      opOnNum (+1) cmds
+      -- }}}
+    OpCommand OP_1SUB                : cmds ->
+      -- {{{
+      opOnNum (\x -> x - 1) cmds
+      -- }}}
+    OpCommand OP_NEGATE              : cmds ->
+      -- {{{
+      opOnNum negate cmds
+      -- }}}
+    OpCommand OP_ABS                 : cmds ->
+      -- {{{
+      opOnNum abs cmds
+      -- }}}
+    OpCommand OP_NOT                 : cmds ->
+      -- {{{
+      opOnHead
+        ( \x ->
+            if bsIsFalse x then
+              -- Similar to OP_IFDUP, the predicate check's
+              -- if x is 0, but the book's code checks for
+              -- "falsiness" instead.
+              LBS.singleton 1
+            else
+              LBS.singleton 0
+        )
+        cmds
+      -- }}}
+    OpCommand OP_0NOTEQUAL           : cmds ->
+      -- {{{
+      opOnHead
+        ( \x ->
+            if bsIsFalse x then
+              -- Similar to OP_IFDUP and OP_NOT.
+              LBS.singleton 0
+            else
+              LBS.singleton 1
+        )
+        cmds
+      -- }}}
+    OpCommand OP_ADD                 : cmds ->
+      -- {{{
+      opOnTwoNums (+) cmds
+      -- }}}
+    OpCommand OP_SUB                 : cmds ->
+      -- {{{
+      -- topmost reduced from the one below it.
+      opOnTwoNums (-) cmds
+      -- }}}
+    OpCommand OP_MUL                 : cmds ->
+      -- {{{
+      opOnTwoNums (*) cmds
+      -- }}}
+    OpCommand OP_BOOLAND             : cmds ->
+      -- {{{
+      opOnHead2
+        ( \h2 h1 ->
+            if bsIsFalse h2 || bsIsFalse h2 then
+              LBS.singleton 0
+            else
+              LBS.singleton 1
+        )
+        cmds
+      -- }}}
+    OpCommand OP_BOOLOR              : cmds ->
+      -- {{{
+      opOnHead2
+        ( \h2 h1 ->
+            if bsIsFalse h2 && bsIsFalse h2 then
+              LBS.singleton 0
+            else
+              LBS.singleton 1
+        )
+        cmds
+      -- }}}
+    OpCommand OP_NUMEQUAL            : cmds ->
+      -- {{{
+      compTwoNums (==) cmds
+      -- }}}
+    OpCommand OP_NUMEQUALVERIFY      : cmds ->
+      -- {{{
+      performAndVerify OP_NUMEQUAL cmds
+      -- }}}
+    OpCommand OP_NUMNOTEQUAL         : cmds ->
+      -- {{{
+      compTwoNums (/=) cmds
+      -- }}}
+    OpCommand OP_LESSTHAN            : cmds ->
+      -- {{{
+      compTwoNums (<) cmds
+      -- }}}
+    OpCommand OP_GREATERTHAN         : cmds ->
+      -- {{{
+      compTwoNums (>) cmds
+      -- }}}
+    OpCommand OP_LESSTHANOREQUAL     : cmds ->
+      -- {{{
+      compTwoNums (<=) cmds
+      -- }}}
+    OpCommand OP_GREATERTHANOREQUAL  : cmds ->
+      -- {{{
+      compTwoNums (>=) cmds
+      -- }}}
+    OpCommand OP_MIN                 : cmds ->
+      -- {{{
+      opOnTwoNums min cmds
+      -- }}}
+    OpCommand OP_MAX                 : cmds ->
+      -- {{{
+      opOnTwoNums max cmds
+      -- }}}
+    OpCommand OP_WITHIN              : cmds ->
+      -- {{{
+      case main of
+        -- left inclusive
+        maxBS : minBS : nBS : restOfMain ->
+          let
+            maxN = decodeNum maxBS
+            minN = decodeNum minBS
+            n    = decodeNum nBS
+            appendResult oneOrZero =
+              updateStack
+                (Script cmds)
+                z
+                (Stack (LBS.singleton oneOrZero : restOfMain) alt)
+          in
+          if n >= minN && n < maxN then
+            appendResult 1
+          else
+            appendResult 0
+        _ ->
+          genericFail
+      -- }}}
+    OpCommand OP_RIPEMD160           : cmds ->
+      -- {{{
+      opOnHead ripemd160 cmds
+      -- }}}
+    OpCommand OP_SHA1                : cmds ->
+      -- {{{
+      opOnHead sha1 cmds
+      -- }}}
+    OpCommand OP_SHA256              : cmds ->
+      -- {{{
+      opOnHead sha256 cmds
+      -- }}}
+    OpCommand OP_HASH160             : cmds ->
+      -- {{{
+      opOnHead hash160 cmds
+      -- }}}
+    OpCommand OP_HASH256             : cmds ->
+      -- {{{
+      opOnHead hash256 cmds
+      -- }}}
+    OpCommand OP_CODESEPARATOR       : cmds ->
+      fail "op_codeseparator" -- TODO
+    OpCommand OP_CHECKSIG            : cmds ->
+      -- {{{
+      case main of
+        secBS : initDER : restOfMain -> do
+          -- {{{
+          derBS <- LBS.safeInit initDER
+          let pubRes :: Either (P.ParseErrorBundle ByteString Void) SECP256K1.PubKey
+              pubRes = P.runParser secParser "" secBS
+              sigRes :: Either (P.ParseErrorBundle ByteString Void) Signature
+              sigRes = P.runParser parser    "" derBS
+              zMsg :: SECP256K1.Message
+              zMsg = fromInteger $ bsToInteger z
+          (pubKey, signature) <- fromTwoEitherValues pubRes sigRes
+          let appendResult oneOrZero =
+                updateStack
+                  (Script cmds)
+                  z
+                  (Stack (oneOrZero : restOfMain) alt)
+          if SECP256K1.verify pubKey zMsg signature then
+            appendResult $ LBS.singleton 1
+          else
+            appendResult $ LBS.singleton 0
+          -- }}}
+        _                                     ->
+          -- {{{
+          genericFail
+          -- }}}
+      -- }}}
+    OpCommand OP_CHECKSIGVERIFY      : cmds ->
+      -- {{{
+      performAndVerify OP_CHECKSIG cmds
+      -- }}}
+    OpCommand OP_CHECKMULTISIG       : cmds ->
+      undefined -- TODO
+    OpCommand OP_CHECKMULTISIGVERIFY : cmds ->
+      -- {{{
+      performAndVerify OP_CHECKMULTISIG cmds
+      -- }}}
+    OpCommand OP_NOP1                : cmds ->
+      noOp cmds
+    OpCommand OP_CHECKLOCKTIMEVERIFY : cmds ->
+      undefined -- TODO
+    OpCommand OP_CHECKSEQUENCEVERIFY : cmds ->
+      undefined -- TODO
+    OpCommand OP_NOP4                : cmds ->
+      noOp cmds
+    OpCommand OP_NOP5                : cmds ->
+      noOp cmds
+    OpCommand OP_NOP6                : cmds ->
+      noOp cmds
+    OpCommand OP_NOP7                : cmds ->
+      noOp cmds
+    OpCommand OP_NOP8                : cmds ->
+      noOp cmds
+    OpCommand OP_NOP9                : cmds ->
+      noOp cmds
+    OpCommand OP_NOP10               : cmds ->
+      noOp cmds
+  -- }}}
+
+
+-- UTILS
+-- {{{
+encodeNum :: Integral a => a -> ByteString
 encodeNum = signedIntegralToBSLE
+decodeNum :: Integral a => ByteString -> a
+decodeNum = bsToSignedIntegralLE
 
 
--- updateStack :: Command -> Stack -> Maybe Stack
--- updateStack cmd stack@(Stack main alt) =
---   -- {{{
---   let
---     noOp          = Just stack
---     appendMain bs = Just $ Stack (bs : main, alt)
---     appendAlt  bs = Just $ Stack (main, bs : alt)
---     appendNum  x  = appendMain $ encodeNum x
---   in
---   case cmd of
---     Element elemBS                   ->
---       appendMain elemBS
---     OpCommand OP_0                   ->
---       appendNum 0
---     OpCommand OP_PUSHDATA1           ->
---       noOp
---     OpCommand OP_PUSHDATA2           ->
---       noOp
---     OpCommand OP_PUSHDATA4           ->
---       noOp
---     OpCommand OP_1NEGATE             ->
---       appendNum (-1)
---     OpCommand OP_1                   ->
---       appendNum 1
---     OpCommand OP_2                   ->
---       appendNum 2
---     OpCommand OP_3                   ->
---       appendNum 3
---     OpCommand OP_4                   ->
---       appendNum 4
---     OpCommand OP_5                   ->
---       appendNum 5
---     OpCommand OP_6                   ->
---       appendNum 6
---     OpCommand OP_7                   ->
---       appendNum 7
---     OpCommand OP_8                   ->
---       appendNum 8
---     OpCommand OP_9                   ->
---       appendNum 9
---     OpCommand OP_10                  ->
---       appendNum 10
---     OpCommand OP_11                  ->
---       appendNum 11
---     OpCommand OP_12                  ->
---       appendNum 12
---     OpCommand OP_13                  ->
---       appendNum 13
---     OpCommand OP_14                  ->
---       appendNum 14
---     OpCommand OP_15                  ->
---       appendNum 15
---     OpCommand OP_16                  ->
---       appendNum 16
---     OpCommand OP_NOP                 ->
---       noOp
---     OpCommand OP_IF                  ->
---       case main of
---         [] ->
---           faile "empty stack."
---         headBS : rest ->
---     OpCommand OP_NOTIF               ->
---     OpCommand OP_ELSE                ->
---     OpCommand OP_ENDIF               ->
---     OpCommand OP_VERIFY              ->
---     OpCommand OP_RETURN              ->
---     OpCommand OP_TOALTSTACK          ->
---     OpCommand OP_FROMALTSTACK        ->
---     OpCommand OP_2DROP               ->
---     OpCommand OP_2DUP                ->
---     OpCommand OP_3DUP                ->
---     OpCommand OP_2OVER               ->
---     OpCommand OP_2ROT                ->
---     OpCommand OP_2SWAP               ->
---     OpCommand OP_IFDUP               ->
---     OpCommand OP_DEPTH               ->
---     OpCommand OP_DROP                ->
---     OpCommand OP_DUP                 ->
---     OpCommand OP_NIP                 ->
---     OpCommand OP_OVER                ->
---     OpCommand OP_PICK                ->
---     OpCommand OP_ROLL                ->
---     OpCommand OP_ROT                 ->
---     OpCommand OP_SWAP                ->
---     OpCommand OP_TUCK                ->
---     OpCommand OP_SIZE                ->
---     OpCommand OP_EQUAL               ->
---     OpCommand OP_EQUALVERIFY         ->
---     OpCommand OP_1ADD                ->
---     OpCommand OP_1SUB                ->
---     OpCommand OP_NEGATE              ->
---     OpCommand OP_ABS                 ->
---     OpCommand OP_NOT                 ->
---     OpCommand OP_0NOTEQUAL           ->
---     OpCommand OP_ADD                 ->
---     OpCommand OP_SUB                 ->
---     OpCommand OP_MUL                 ->
---     OpCommand OP_BOOLAND             ->
---     OpCommand OP_BOOLOR              ->
---     OpCommand OP_NUMEQUAL            ->
---     OpCommand OP_NUMEQUALVERIFY      ->
---     OpCommand OP_NUMNOTEQUAL         ->
---     OpCommand OP_LESSTHAN            ->
---     OpCommand OP_GREATERTHAN         ->
---     OpCommand OP_LESSTHANOREQUAL     ->
---     OpCommand OP_GREATERTHANOREQUAL  ->
---     OpCommand OP_MIN                 ->
---     OpCommand OP_MAX                 ->
---     OpCommand OP_WITHIN              ->
---     OpCommand OP_RIPEMD160           ->
---     OpCommand OP_SHA1                ->
---     OpCommand OP_SHA256              ->
---     OpCommand OP_HASH160             ->
---     OpCommand OP_HASH256             ->
---     OpCommand OP_CODESEPARATOR       ->
---     OpCommand OP_CHECKSIG            ->
---     OpCommand OP_CHECKSIGVERIFY      ->
---     OpCommand OP_CHECKMULTISIG       ->
---     OpCommand OP_CHECKMULTISIGVERIFY ->
---     OpCommand OP_NOP1                ->
---     OpCommand OP_CHECKLOCKTIMEVERIFY ->
---     OpCommand OP_CHECKSEQUENCEVERIFY ->
---     OpCommand OP_NOP4                ->
---     OpCommand OP_NOP5                ->
---     OpCommand OP_NOP6                ->
---     OpCommand OP_NOP7                ->
---     OpCommand OP_NOP8                ->
---     OpCommand OP_NOP9                ->
---     OpCommand OP_NOP10               ->
---   -- }}}
--- 
--- 
--- 
--- evaluate :: Script -> Maybe Stack
--- evaluate (Script script) =
+bsIsFalse :: ByteString -> Bool
+bsIsFalse bs =
+  decodeNum bs == 0
+
+bsBooleanToggle :: ByteString -> ByteString
+bsBooleanToggle bs =
+  if bsIsFalse bs then
+    LBS.singleton 1
+  else
+    LBS.empty
+
+fromTwoEitherValues :: Either p x -> Either q y -> Maybe (x, y)
+fromTwoEitherValues (Right x) (Right y) = Just (x, y)
+fromTwoEitherValues _         _         = Nothing
+-- }}}
 
 
 -- SAMPLE VALUES
