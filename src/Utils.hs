@@ -30,6 +30,8 @@ module Utils
   , ripemd160
   , hash160
   , hash256
+  , indexedMap
+  , indexedMapM
   ) where
 -- }}}
 
@@ -37,6 +39,7 @@ module Utils
 -- IMPORTS
 -- {{{
 import           Debug.Trace                 (trace)
+import           Control.Monad               (zipWithM)
 import           Crypto.Hash                 (hashWith, SHA1 (..), SHA256 (..), RIPEMD160 (..))
 import qualified Data.Binary                 as Bin
 import           Data.Bits
@@ -48,6 +51,7 @@ import qualified Data.ByteString.Lazy.Base16 as B16
 import qualified Data.ByteString.Lazy        as LBS
 import qualified Data.Char                   as Char
 import           Data.Char                   (chr)
+import           Data.List                   (foldl')
 import           Data.Function               ((&))
 import           Data.Maybe                  (fromMaybe)
 import           Data.Memory.Endian          (getSystemEndianness, Endianness (..))
@@ -390,6 +394,20 @@ hash256 =
   -- {{{
   LBS.fromStrict . BA.convert . hashWith SHA256 . hashWith SHA256 . LBS.toStrict
   -- }}}
+
+
+indexedMap :: (Int -> a -> b) -> [a] -> [b]
+indexedMap f xs =
+  -- {{{
+  let
+    go _     soFar []       = soFar
+    go index soFar (y : ys) = go (index + 1) (f index y : soFar) ys
+  in
+  reverse $ go 0 [] xs
+  -- }}}
+
+indexedMapM :: Monad m => (Int -> a -> m b) -> [a] -> m [b]
+indexedMapM fn xs = zipWithM fn [0 .. length xs - 1] xs
 -- }}}
 
 

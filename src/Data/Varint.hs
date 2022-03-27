@@ -1,5 +1,6 @@
 module Data.Varint
   ( Varint (..)
+  , serializeList
   , countParser
   , lengthPrefixed
   ) where
@@ -48,7 +49,14 @@ instance Serializable Varint where
       else
         return $ Varint $ fromIntegral fstByte
     -- }}}
-  
+
+
+serializeList :: Serializable a => [a] -> ByteString
+serializeList [] = LBS.singleton 0
+serializeList xs =
+     serialize (Varint $ fromIntegral $ length xs) 
+  <> foldr ((<>) . serialize) LBS.empty xs
+
 
 serializeHelper :: Bool -> Varint -> ByteString
 serializeHelper be (Varint n) =

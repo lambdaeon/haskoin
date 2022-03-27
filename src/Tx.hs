@@ -42,6 +42,8 @@ import           TxIn                        (TxIn (..))
 import qualified TxIn
 import           TxOut                       (TxOut (..))
 import qualified TxOut
+import           SECP256K1                   (PubKey, SecKey, SigHash)
+import qualified SECP256K1
 import           Utils
 -- }}}
 
@@ -86,17 +88,9 @@ makeTx ver ins outs locktime testnet =
 
 
 instance Serializable Tx where
-  serialize Tx {..} =
+  serialize tx =
     -- {{{
-    let
-      serializeList serializer theList =
-           serialize (Varint $ fromIntegral $ length theList)
-        <> foldr (\tx acc -> serializer tx <> acc) LBS.empty theList
-    in
-       integralToNBytesLE 4 txVersion
-    <> serializeList serialize  txTxIns
-    <> serializeList serialize txTxOuts
-    <> serialize txLocktime
+    serializeWithCustomTxIns (Varint.serializeList $ txTxIns tx) tx
     -- }}}
   parser = do
     -- {{{
@@ -110,6 +104,15 @@ instance Serializable Tx where
         txTestnet = False
     return $ Tx {..}
     -- }}}
+
+serializeWithCustomTxIns :: ByteString -> Tx -> ByteString
+serializeWithCustomTxIns bs Tx {..} =
+  -- {{{
+     integralToNBytesLE 4 txVersion
+  <> bs
+  <> Varint.serializeList txTxOuts
+  <> serialize            txLocktime
+  -- }}}
 
 
 fetch :: Bool -> ByteString -> IO (Either (P.ParseErrorBundle ByteString Void) Tx)
@@ -129,8 +132,8 @@ fetch testnet txId =
   -- }}}
 
 
-getTxInAmount :: Bool -> TxIn -> IO (Maybe Word)
-getTxInAmount testnet TxIn {..} = do
+getTxInsTxOut :: Bool -> TxIn -> IO (Maybe TxOut)
+getTxInsTxOut testnet TxIn {..} = do
   -- {{{
   fetchRes <- fetch testnet txInPrevTx
   case fetchRes of
@@ -141,8 +144,8 @@ getTxInAmount testnet TxIn {..} = do
         outsCount = fromIntegral $ length txOuts
         prevIndex = fromIntegral txInPrevIndex
       in
-      if txInPrevIndex < outsCount - 1 then
-        return $ Just $ txOutAmount $ txOuts !! prevIndex
+      if txInPrevIndex < outsCount then
+        return $ Just $ txOuts !! prevIndex
       else
         return Nothing
       -- }}}
@@ -153,13 +156,59 @@ getTxInAmount testnet TxIn {..} = do
   -- }}}
 
 
+getTxInAmount :: Bool -> TxIn -> IO (Maybe Word)
+getTxInAmount testnet txIn = do
+  -- {{{
+  mTxOut <- getTxInsTxOut testnet txIn
+  return $ fmap txOutAmount mTxOut
+  -- }}}
+
+
 fee :: Bool -> Tx -> IO (Maybe Word)
 fee testnet Tx {..} =
   -- {{{
   let
     ioMaybeWords = forM txTxIns (getTxInAmount testnet)
-  in
-  (sum <$>) . sequence <$> ioMaybeWords
+    totOut       = foldr (\txOut acc -> txOutAmount txOut + acc) 0 txTxOuts
+  in do
+  mTotIn <- (sum <$>) . sequence <$> ioMaybeWords
+  return $ (\totIn -> totIn - totOut) <$> mTotIn
+  -- }}}
+
+
+sigHash :: Tx -> Int -> IO (Maybe SigHash)
+sigHash tx@Tx {..} txInIndex
+  -- {{{
+  | txInIndex >= length txTxIns = return Nothing
+  | txInIndex <  0              = return Nothing
+  | otherwise                   =
+      let
+        ioMaybeBSs =
+          -- {{{
+          indexedMapM
+            ( \index txIn ->
+                if index == txInIndex then do
+                  mTxOut <- getTxInsTxOut txTestnet txIn
+                  return $ fmap
+                    ( \txOut ->
+                        TxIn.serializeWithCustomScriptSig
+                          (serialize $ txOutScriptPubKey txOut)
+                          txIn
+                    )
+                    mTxOut
+                else
+                  return $ Just $ TxIn.serializeWithoutScriptSig txIn
+            )
+            txTxIns
+          -- }}}
+      in do
+      mTxInsBS <- (LBS.concat <$>) . sequence <$> ioMaybeBSs
+      return $ do
+        txInsBS <- mTxInsBS
+        let beforeHash =
+                 serializeWithCustomTxIns txInsBS tx
+              <> integralToNBytesLE 4 1 -- SIGHASH_ALL at the end.
+        return $ fromInteger $ bsToInteger $ hash256 beforeHash
   -- }}}
 
 

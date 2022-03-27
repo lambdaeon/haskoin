@@ -15,7 +15,7 @@ module SECP256K1
   , testnetWallet
   , PubKey
   , SecKey
-  , Message
+  , SigHash
   , Nonce
   ) where
 
@@ -38,7 +38,7 @@ import           TestnetWalletPassPhrase (sourceForSecretKey)
 -- {{{
 type PubKey    = S256Point
 type SecKey    = S256Order
-type Message   = S256Order
+type SigHash   = S256Order
 type Nonce     = S256Order
 -- }}}
 
@@ -57,7 +57,7 @@ wifOf compressed testnet e =
   toBase58WithChecksum $ pre <> eBS <> suf
   -- }}}
 
-verify :: PubKey -> Message -> Signature -> Bool
+verify :: PubKey -> SigHash -> Signature -> Bool
 verify pubPoint z_ Signature {r = r_, s = s} =
   -- {{{
   let
@@ -78,7 +78,7 @@ verify pubPoint z_ Signature {r = r_, s = s} =
   -- }}}
 
 
-signWith :: SecKey -> Nonce -> Message -> Maybe Signature
+signWith :: SecKey -> Nonce -> SigHash -> Maybe Signature
 signWith e_ k_ z_ = do
   -- {{{
   let e = toInteger e_

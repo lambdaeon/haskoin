@@ -4,6 +4,8 @@
 
 module TxIn
   ( TxIn (..)
+  , serializeWithCustomScriptSig
+  , serializeWithoutScriptSig
   , sampleTxIn
   ) where
 
@@ -53,12 +55,9 @@ instance Show TxIn where
   -- }}}
 
 instance Serializable TxIn where
-  serialize TxIn {..} =
+  serialize txIn =
     -- {{{
-       txInPrevTx
-    <> integralToNBytesLE 4 txInPrevIndex
-    <> serialize txInScriptSig
-    <> integralToNBytesLE 4 txInSequence
+    serializeWithCustomScriptSig (serialize $ txInScriptSig txIn) txIn
     -- }}}
   parser = do
     -- {{{
@@ -68,5 +67,23 @@ instance Serializable TxIn where
     txInSequence   <- word32ParserLE "sequence"  
     return $ TxIn {..}
   -- }}}
+
+
+serializeWithCustomScriptSig :: ByteString -> TxIn -> ByteString
+serializeWithCustomScriptSig customSS TxIn {..} =
+  -- {{{
+     txInPrevTx
+  <> integralToNBytesLE 4 txInPrevIndex
+  <> customSS
+  <> integralToNBytesLE 4 txInSequence
+  -- }}}
+
+
+serializeWithoutScriptSig :: TxIn -> ByteString
+serializeWithoutScriptSig =
+  -- {{{
+  serializeWithCustomScriptSig $ LBS.singleton 0
+  -- }}}
+
 
 

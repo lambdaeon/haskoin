@@ -1180,7 +1180,7 @@ updateStack (Script script) z stack@(Stack main alt) =
               pubRes = P.runParser secParser "" secBS
               sigRes :: Either (P.ParseErrorBundle ByteString Void) Signature
               sigRes = P.runParser parser    "" derBS
-              zMsg :: SECP256K1.Message
+              zMsg :: SECP256K1.SigHash
               zMsg = fromInteger $ bsToInteger z
           (pubKey, signature) <- fromTwoEitherValues pubRes sigRes
           let appendResult oneOrZero =
