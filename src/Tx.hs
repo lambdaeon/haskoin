@@ -36,14 +36,15 @@ import           Extension.ByteString.Parser
 import           Locktime                    (Locktime)
 import qualified Locktime
 import           Network.HTTP.Simple         (httpLbs, getResponseBody, Request)
+import qualified Script
+import           SECP256K1                   (PubKey, SecKey, SigHash)
+import qualified SECP256K1
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Debug       as P
 import           TxIn                        (TxIn (..))
 import qualified TxIn
 import           TxOut                       (TxOut (..))
 import qualified TxOut
-import           SECP256K1                   (PubKey, SecKey, SigHash)
-import qualified SECP256K1
 import           Utils
 -- }}}
 
@@ -115,6 +116,85 @@ serializeWithCustomTxIns bs Tx {..} =
   -- }}}
 
 
+fee :: Bool -> Tx -> IO (Maybe Word)
+fee testnet Tx {..} =
+  -- {{{
+  let
+    ioMaybeWords = forM txTxIns (getTxInAmount testnet)
+    totOut       = foldr (\txOut acc -> txOutAmount txOut + acc) 0 txTxOuts
+  in do
+  mTotIn <- (sum <$>) . sequence <$> ioMaybeWords
+  return $ (\totIn -> totIn - totOut) <$> mTotIn
+  -- }}}
+
+
+--  temporary, for performance v---------v
+sigHashForTxIn :: Tx -> Int -> Maybe TxOut -> IO (Maybe SigHash)
+sigHashForTxIn tx@Tx {..} txInIndex mTxOutCache
+  -- {{{
+  | txInIndex >= length txTxIns = return Nothing
+  | txInIndex <  0              = return Nothing
+  | otherwise                   =
+      let
+        ioMaybeBSs =
+          -- {{{
+          indexedMapM
+            ( \index txIn ->
+                if index == txInIndex then do
+                  mTxOut <- case mTxOutCache of
+                              Just _  ->
+                                return mTxOutCache
+                              Nothing ->
+                                getTxInsTxOut txTestnet txIn
+                  return $ fmap
+                    ( \txOut ->
+                        TxIn.serializeWithCustomScriptSig
+                          (serialize $ txOutScriptPubKey txOut)
+                          txIn
+                    )
+                    mTxOut
+                else
+                  return $ Just $ TxIn.serializeWithoutScriptSig txIn
+            )
+            txTxIns
+          -- }}}
+      in do
+      mTxInsBS <- (LBS.concat <$>) . sequence <$> ioMaybeBSs
+      return $ do
+        txInsBS <- mTxInsBS
+        let beforeHash =
+                 serializeWithCustomTxIns txInsBS tx
+              <> integralToNBytesLE 4 1 -- SIGHASH_ALL at the end.
+        return $ fromInteger $ bsToInteger $ hash256 beforeHash
+  -- }}}
+
+
+verifyTxIn :: Tx -> Int -> IO Bool
+verifyTxIn tx@Tx {..} txInIndex
+  -- {{{
+  -- Returns whether the input has a valid signature
+  -- # get the relevant input
+  -- # grab the previous ScriptPubKey
+  -- # get the signature hash (z)
+  -- # combine the current ScriptSig and the previous ScriptPubKey
+  -- # evaluate the combined script
+  | txInIndex >= length txTxIns = return False
+  | txInIndex <  0              = return False
+  | otherwise                   = do
+      let txIn = txTxIns !! txInIndex
+      mTxOut   <- getTxInsTxOut txTestnet txIn
+      mSigHash <- sigHashForTxIn tx txInIndex mTxOut
+      case (mTxOut, mSigHash) of
+        (Just txOut, Just sigHash) ->
+          return $ Script.validate
+            (txInScriptSig     txIn )
+            (txOutScriptPubKey txOut)
+            sigHash
+        _ ->
+          return False
+  -- }}}
+
+
 fetch :: Bool -> ByteString -> IO (Either (P.ParseErrorBundle ByteString Void) Tx)
 fetch testnet txId =
   -- {{{
@@ -161,54 +241,6 @@ getTxInAmount testnet txIn = do
   -- {{{
   mTxOut <- getTxInsTxOut testnet txIn
   return $ fmap txOutAmount mTxOut
-  -- }}}
-
-
-fee :: Bool -> Tx -> IO (Maybe Word)
-fee testnet Tx {..} =
-  -- {{{
-  let
-    ioMaybeWords = forM txTxIns (getTxInAmount testnet)
-    totOut       = foldr (\txOut acc -> txOutAmount txOut + acc) 0 txTxOuts
-  in do
-  mTotIn <- (sum <$>) . sequence <$> ioMaybeWords
-  return $ (\totIn -> totIn - totOut) <$> mTotIn
-  -- }}}
-
-
-sigHash :: Tx -> Int -> IO (Maybe SigHash)
-sigHash tx@Tx {..} txInIndex
-  -- {{{
-  | txInIndex >= length txTxIns = return Nothing
-  | txInIndex <  0              = return Nothing
-  | otherwise                   =
-      let
-        ioMaybeBSs =
-          -- {{{
-          indexedMapM
-            ( \index txIn ->
-                if index == txInIndex then do
-                  mTxOut <- getTxInsTxOut txTestnet txIn
-                  return $ fmap
-                    ( \txOut ->
-                        TxIn.serializeWithCustomScriptSig
-                          (serialize $ txOutScriptPubKey txOut)
-                          txIn
-                    )
-                    mTxOut
-                else
-                  return $ Just $ TxIn.serializeWithoutScriptSig txIn
-            )
-            txTxIns
-          -- }}}
-      in do
-      mTxInsBS <- (LBS.concat <$>) . sequence <$> ioMaybeBSs
-      return $ do
-        txInsBS <- mTxInsBS
-        let beforeHash =
-                 serializeWithCustomTxIns txInsBS tx
-              <> integralToNBytesLE 4 1 -- SIGHASH_ALL at the end.
-        return $ fromInteger $ bsToInteger $ hash256 beforeHash
   -- }}}
 
 

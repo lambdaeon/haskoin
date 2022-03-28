@@ -380,7 +380,7 @@ main = hspec $ do
     it "Correctly parsed the serialized ScriptPubKey." $ do
       parseRes `shouldParse` givenScriptPubKey
     it "[Element 2, Element 2] is a valid ScriptSig." $ do
-      Script.validate validScriptSig givenScriptPubKey Nothing `shouldBe` True
+      Script.validate validScriptSig givenScriptPubKey 0 `shouldBe` True
     -- }}}
 
   describe "\nChapter 6 - Exercise 4" $ do

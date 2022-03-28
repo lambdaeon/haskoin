@@ -40,6 +40,7 @@ import qualified Text.Megaparsec.Byte      as BP
 import           Utils
 import           SECP256K1.S256Point
 import           SECP256K1.Signature
+import           SECP256K1                 (SigHash)
 import qualified SECP256K1
 
 
@@ -433,13 +434,13 @@ data Stack = Stack
 emptyStack = Stack [] []
 
 
-validate :: ScriptSig -> ScriptPubKey -> Maybe ByteString -> Bool
-validate scriptSig scriptPubKey mZ = --   ^--------------^ probably temporary...
+validate :: ScriptSig -> ScriptPubKey -> SigHash -> Bool
+validate scriptSig scriptPubKey z =
   -- ScriptSig should stack on top of ScriptPubKey.
   isJust $
     updateStack
       (scriptSig <> scriptPubKey)
-      (fromMaybe LBS.empty mZ)
+      (integralToBS z)
       emptyStack
 
 
