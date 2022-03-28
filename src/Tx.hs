@@ -116,11 +116,11 @@ serializeWithCustomTxIns bs Tx {..} =
   -- }}}
 
 
-fee :: Bool -> Tx -> IO (Maybe Word)
-fee testnet Tx {..} =
+fee :: Tx -> IO (Maybe Word)
+fee Tx {..} =
   -- {{{
   let
-    ioMaybeWords = forM txTxIns (getTxInAmount testnet)
+    ioMaybeWords = forM txTxIns (getTxInAmount txTestnet)
     totOut       = foldr (\txOut acc -> txOutAmount txOut + acc) 0 txTxOuts
   in do
   mTotIn <- (sum <$>) . sequence <$> ioMaybeWords
@@ -128,49 +128,61 @@ fee testnet Tx {..} =
   -- }}}
 
 
---  temporary, for performance v---------v
-sigHashForTxIn :: Tx -> Int -> Maybe TxOut -> IO (Maybe SigHash)
-sigHashForTxIn tx@Tx {..} txInIndex mTxOutCache
+verify :: Tx -> IO Bool
+verify tx@Tx {..} = do
   -- {{{
-  | txInIndex >= length txTxIns = return Nothing
-  | txInIndex <  0              = return Nothing
-  | otherwise                   =
-      let
-        ioMaybeBSs =
-          -- {{{
-          indexedMapM
-            ( \index txIn ->
-                if index == txInIndex then do
-                  mTxOut <- case mTxOutCache of
-                              Just _  ->
-                                return mTxOutCache
-                              Nothing ->
-                                getTxInsTxOut txTestnet txIn
-                  return $ fmap
-                    ( \txOut ->
-                        TxIn.serializeWithCustomScriptSig
-                          (serialize $ txOutScriptPubKey txOut)
-                          txIn
-                    )
-                    mTxOut
-                else
-                  return $ Just $ TxIn.serializeWithoutScriptSig txIn
-            )
-            txTxIns
-          -- }}}
-      in do
-      mTxInsBS <- (LBS.concat <$>) . sequence <$> ioMaybeBSs
-      return $ do
-        txInsBS <- mTxInsBS
-        let beforeHash =
-                 serializeWithCustomTxIns txInsBS tx
-              <> integralToNBytesLE 4 1 -- SIGHASH_ALL at the end.
-        return $ fromInteger $ bsToInteger $ hash256 beforeHash
+  mFee <- fee tx
+  case mFee of
+    Just fee -> do
+      let ioValids :: IO [Bool]
+          ioValids = mapM (verifyTxIn tx) txTxIns
+      validTxIns <- and <$> ioValids
+      return (fee >= 0 && validTxIns)
+    Nothing ->
+      return False
   -- }}}
 
 
-verifyTxIn :: Tx -> Int -> IO Bool
-verifyTxIn tx@Tx {..} txInIndex
+--  temporary, for performance v---------v
+sigHashForTxIn :: Tx -> TxIn -> Maybe TxOut -> IO (Maybe SigHash)
+sigHashForTxIn tx@Tx {..} txIn mTxOutCache =
+  -- {{{
+  let
+    ioMaybeBSs =
+      -- {{{
+      mapM
+        ( \txIn' ->
+            if txIn == txIn' then do
+              mTxOut <- case mTxOutCache of
+                          Just _  ->
+                            return mTxOutCache
+                          Nothing ->
+                            getTxInsTxOut txTestnet txIn
+              return $ fmap
+                ( \txOut ->
+                    TxIn.serializeWithCustomScriptSig
+                      (serialize $ txOutScriptPubKey txOut)
+                      txIn
+                )
+                mTxOut
+            else
+              return $ Just $ TxIn.serializeWithoutScriptSig txIn
+        )
+        txTxIns
+      -- }}}
+  in do
+  mTxInsBS <- (LBS.concat <$>) . sequence <$> ioMaybeBSs
+  return $ do
+    txInsBS <- mTxInsBS
+    let beforeHash =
+             serializeWithCustomTxIns txInsBS tx
+          <> integralToNBytesLE 4 1 -- SIGHASH_ALL at the end.
+    return $ fromInteger $ bsToInteger $ hash256 beforeHash
+  -- }}}
+
+
+verifyTxIn :: Tx -> TxIn -> IO Bool
+verifyTxIn tx@Tx {..} txIn = do
   -- {{{
   -- Returns whether the input has a valid signature
   -- # get the relevant input
@@ -178,20 +190,16 @@ verifyTxIn tx@Tx {..} txInIndex
   -- # get the signature hash (z)
   -- # combine the current ScriptSig and the previous ScriptPubKey
   -- # evaluate the combined script
-  | txInIndex >= length txTxIns = return False
-  | txInIndex <  0              = return False
-  | otherwise                   = do
-      let txIn = txTxIns !! txInIndex
-      mTxOut   <- getTxInsTxOut txTestnet txIn
-      mSigHash <- sigHashForTxIn tx txInIndex mTxOut
-      case (mTxOut, mSigHash) of
-        (Just txOut, Just sigHash) ->
-          return $ Script.validate
-            (txInScriptSig     txIn )
-            (txOutScriptPubKey txOut)
-            sigHash
-        _ ->
-          return False
+  mTxOut   <- getTxInsTxOut txTestnet txIn
+  mSigHash <- sigHashForTxIn tx txIn mTxOut
+  case (mTxOut, mSigHash) of
+    (Just txOut, Just sigHash) ->
+      return $ Script.validate
+        (txInScriptSig     txIn )
+        (txOutScriptPubKey txOut)
+        sigHash
+    _ ->
+      return False
   -- }}}
 
 
