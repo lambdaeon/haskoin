@@ -7,6 +7,8 @@ module Utils
   ( encodeHex
   , encodeHexLE
   , encodeBase58
+  , decodeHex
+  , decodeHexLE
   , integerToBase58
   , toBase58WithChecksum
   , bsToInteger
@@ -32,6 +34,7 @@ module Utils
   , hash256
   , indexedMap
   , indexedMapM
+  , eitherToMaybe
   ) where
 -- }}}
 
@@ -294,6 +297,15 @@ encodeHexLE = encodeHex . LBS.invForLE
 ---------------------------------------
 
 
+decodeHex :: ByteString -> Either Text ByteString
+decodeHex = B16.decodeBase16
+
+
+decodeHexLE :: ByteString -> Either Text ByteString
+decodeHexLE = decodeHex . LBS.invForLE
+
+
+
 integralToBS :: Integral n => n -> ByteString
 integralToBS = integerToBS . toInteger
 
@@ -408,6 +420,11 @@ indexedMap f xs =
 
 indexedMapM :: Monad m => (Int -> a -> m b) -> [a] -> m [b]
 indexedMapM fn xs = zipWithM fn [0 .. length xs - 1] xs
+
+
+eitherToMaybe :: Either a b -> Maybe b
+eitherToMaybe (Right b) = Just b
+eitherToMaybe _         = Nothing
 -- }}}
 
 

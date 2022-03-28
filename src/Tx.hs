@@ -13,7 +13,9 @@ module Tx
   , getTxLocktime
   , getTxTestnet
   , makeTx
+  , fetch
   , fee
+  , verify
   , sampleTxBS
   ) where
 -- }}}
@@ -203,7 +205,7 @@ verifyTxIn tx@Tx {..} txIn = do
   -- }}}
 
 
-fetch :: Bool -> ByteString -> IO (Either (P.ParseErrorBundle ByteString Void) Tx)
+fetch :: Bool -> ByteString -> IO (Maybe Tx)
 fetch testnet txId =
   -- {{{
   let
@@ -213,10 +215,12 @@ fetch testnet txId =
       else
         "https://blockstream.info/api/"
     url :: Request
-    url = fromString $ filter (/= '\"') $ show $ baseEndPoint <> "tx/" <> encodeHex txId <> "/hex"
+    url = fromString $ filter (/= '"') $ show $ baseEndPoint <> "tx/" <> encodeHex txId <> "/hex"
   in do
   response <- httpLbs url
-  return $ P.runParser parser "" $ getResponseBody response
+  return $ do
+    resBS <- eitherToMaybe $ decodeHex $ getResponseBody response
+    eitherToMaybe $ P.runParser parser "" resBS
   -- }}}
 
 
@@ -225,7 +229,7 @@ getTxInsTxOut testnet TxIn {..} = do
   -- {{{
   fetchRes <- fetch testnet txInPrevTx
   case fetchRes of
-    Right tx ->
+    Just tx ->
       -- {{{
       let
         txOuts    = txTxOuts tx
@@ -237,7 +241,7 @@ getTxInsTxOut testnet TxIn {..} = do
       else
         return Nothing
       -- }}}
-    Left _ ->
+    Nothing ->
       -- {{{
       return Nothing
       -- }}}

@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.4.
+-- This file has been generated from package.yaml by hpack version 0.34.5.
 --
 -- see: https://github.com/sol/hpack
 
@@ -24,15 +24,46 @@ source-repository head
 
 library
   exposed-modules:
+      Data.Serializable
+      Data.Varint
       EllipticCurve
+      Extension.ByteString
+      Extension.ByteString.Lazy
+      Extension.ByteString.Parser
       FieldElement
       FiniteFieldEllipticCurve
+      Locktime
+      Script
+      SECP256K1
+      SECP256K1.Constants
+      SECP256K1.S256Field
+      SECP256K1.S256Point
+      SECP256K1.Signature
+      TestnetWalletPassPhrase
+      Tx
+      TxIn
+      TxOut
+      Utils
   other-modules:
       Paths_haskoin
   hs-source-dirs:
       src
   build-depends:
       base >=4.7 && <5
+    , base16
+    , binary
+    , bytestring
+    , containers
+    , cryptonite
+    , groups
+    , http-client
+    , http-client-tls
+    , http-conduit
+    , megaparsec
+    , memory
+    , network
+    , text
+    , time
   default-language: Haskell2010
 
 executable haskoin-exe
@@ -44,7 +75,22 @@ executable haskoin-exe
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , base16
+    , binary
+    , bytestring
+    , containers
+    , cryptonite
+    , groups
     , haskoin
+    , hspec
+    , http-client
+    , http-client-tls
+    , http-conduit
+    , megaparsec
+    , memory
+    , network
+    , text
+    , time
   default-language: Haskell2010
 
 test-suite haskoin-test
@@ -57,5 +103,21 @@ test-suite haskoin-test
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , base16
+    , binary
+    , bytestring
+    , containers
+    , cryptonite
+    , groups
     , haskoin
+    , hspec
+    , hspec-megaparsec
+    , http-client
+    , http-client-tls
+    , http-conduit
+    , megaparsec
+    , memory
+    , network
+    , text
+    , time
   default-language: Haskell2010
