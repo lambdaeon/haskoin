@@ -9,8 +9,15 @@ module Utils
   , encodeBase58
   , decodeHex
   , decodeHexLE
+  -- , decodeBase58
+  , base58Chars
+  , getIndexOfBase58Char
+  -- 
+  , showIntegralInBase58
   , integerToBase58
+  , base58ToInteger
   , toBase58WithChecksum
+  , showBase58EncodedBS
   , bsToInteger
   , bsToIntegerLE
   , bsToSignedIntegral
@@ -35,6 +42,7 @@ module Utils
   , indexedMap
   , indexedMapM
   , eitherToMaybe
+  , (!?)
   ) where
 -- }}}
 
@@ -65,6 +73,7 @@ import qualified Data.Text                   as Text
 import           Data.Word                   (Word8, Word32)
 import qualified Extension.ByteString        as BS
 import qualified Extension.ByteString.Lazy   as LBS
+import           Numeric                     (showIntAtBase)
 -- }}}
 
 
@@ -76,7 +85,7 @@ base58Chars =
   map chr [48..122]
   & filter
       ( \c ->
-          Char.isAlphaNum c
+             Char.isAlphaNum c
           && c /= '0'
           && c /= 'O'
           && c /= 'l'
@@ -87,14 +96,59 @@ base58Chars =
   -- }}}
 
 
+getIndexOfBase58Char :: Word8 -> Maybe Integer
+getIndexOfBase58Char target =
+  -- {{{
+  let
+    go _          []                = Nothing
+    go Nothing    _                 = Nothing
+    go (Just acc) (currByte : rest) =
+      if currByte == target then
+        Just acc
+      else
+        go (Just $ acc + 1) rest
+  in
+  go (Just 0) base58Chars
+  -- }}}
+
+
 encodeBase58 :: ByteString -> ByteString
 encodeBase58 bs =
   -- {{{
   let
     (nulls, rest) = LBS.break (/= 0) bs
-    pre = LBS.replicate (LBS.length nulls) 49 -- '1' is 0 in Base58
+    -- pre = LBS.replicate (LBS.length nulls) 49 -- '1' is 0 in Base58
+    pre = LBS.replicate (LBS.length nulls) 0
   in
   pre <> integerToBase58 (bsToInteger rest)
+  -- }}}
+
+
+base58ToInteger :: ByteString -> Maybe Integer
+base58ToInteger bs =
+  -- {{{
+  let
+    foldFn _        Nothing             = Nothing
+    foldFn currByte (Just (count, acc)) =
+      Just
+        ( count + 1
+        , fromIntegral currByte * 58 ^ count + acc
+        )
+  in
+  snd <$> LBS.foldr foldFn (Just (0, 0)) bs
+  -- }}}
+
+
+showIntegralInBase58 :: (Integral a, Show a) => a -> Maybe String
+showIntegralInBase58 x
+  -- {{{
+  | x < 0     = Nothing
+  | otherwise =
+      Just $ showIntAtBase
+        58
+        (\ind -> chr $ fromIntegral (base58Chars !! ind))
+        x
+        ""
   -- }}}
 
 
@@ -114,7 +168,7 @@ integerToBase58 n =
       -- }}}
   in
   go n []
-  & map ((base58Chars !!) . fromIntegral)
+  -- & map ((base58Chars !!) . fromIntegral)
   & LBS.pack
   -- }}}
 
@@ -128,6 +182,12 @@ toBase58WithChecksum bs =
   in
   encodeBase58 tier1
   -- }}}
+
+
+showBase58EncodedBS :: ByteString -> Maybe String
+showBase58EncodedBS bs =
+    LBS.unpack bs
+  & traverse ((chr . fromIntegral <$>) . (base58Chars !?) . fromIntegral)
 
 
 -- From the original "haskoin" project.
@@ -425,6 +485,28 @@ indexedMapM fn xs = zipWithM fn [0 .. length xs - 1] xs
 eitherToMaybe :: Either a b -> Maybe b
 eitherToMaybe (Right b) = Just b
 eitherToMaybe _         = Nothing
+
+
+-- from `extra` package.
+(!?) :: [a] -> Int -> Maybe a
+xs !? n
+  -- {{{
+  | n < 0     =
+      Nothing
+  | otherwise =
+      foldr
+        ( \x r k ->
+            case k of
+              0 ->
+                Just x
+              _ ->
+                r (k-1)
+        )
+        (const Nothing)
+        xs
+        n
+  -- }}}
+
 -- }}}
 
 

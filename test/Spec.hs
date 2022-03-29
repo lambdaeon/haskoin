@@ -189,16 +189,16 @@ main = do
       -- {{{
       it "Base58 encoding of 0x7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d correctly found." $ do
         shouldBe
-          (Utils.integerToBase58 0x7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d)
-          "9MA8fRQrT4u8Zj8ZRd6MAiiyaxb2Y1CMpvVkHQu5hVM6"
+          (Utils.showBase58EncodedBS $ Utils.integerToBase58 0x7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d)
+          (Just "9MA8fRQrT4u8Zj8ZRd6MAiiyaxb2Y1CMpvVkHQu5hVM6")
       it "Base58 encoding of 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c   correctly found." $ do
         shouldBe
-          (Utils.integerToBase58 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c)
-          "4fE3H2E6XMp4SsxtwinF7w9a34ooUrwWe4WsW1458Pd"
+          (Utils.showBase58EncodedBS $ Utils.integerToBase58 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c)
+          (Just "4fE3H2E6XMp4SsxtwinF7w9a34ooUrwWe4WsW1458Pd")
       it "Base58 encoding of 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6 correctly found." $ do
         shouldBe
-          (Utils.integerToBase58 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6)
-          "EQJsjkd6JaGwxrjEhfeqPenqHwrBmPQZjJGNSCHBkcF7"
+          (Utils.showBase58EncodedBS $ Utils.integerToBase58 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6)
+          (Just "EQJsjkd6JaGwxrjEhfeqPenqHwrBmPQZjJGNSCHBkcF7")
       -- }}}
 
     describe "\nChapter 4 - Exercise 5" $ do
@@ -207,43 +207,43 @@ main = do
             let
               pub = SECP256K1.pubKeyOf sec
             in
-            S256Point.address comp test pub
+            Utils.showBase58EncodedBS $ S256Point.address comp test pub
       it "Successfully found the address corresponding to 5002." $ do
         shouldBe
           (fromSecret False True 5002)
-          "mmTPbXQFxboEtNRkwfh6K51jvdtHLxGeMA"
+          (Just "mmTPbXQFxboEtNRkwfh6K51jvdtHLxGeMA")
       it "Successfully found the address corresponding to 2020^5." $ do
         shouldBe
           (fromSecret True True $ 2020 ^ 5)
-          "mopVkxp8UhXqRYbCYJsbeE1h1fiF64jcoH"
+          (Just "mopVkxp8UhXqRYbCYJsbeE1h1fiF64jcoH")
       it "Successfully found the address corresponding to 0x12345deadbeef." $ do
         shouldBe
           (fromSecret True False 0x12345deadbeef)
-          "1F1Pn2y6pDb68E5nYJJeba4TLg2U7B6KF1"
+          (Just "1F1Pn2y6pDb68E5nYJJeba4TLg2U7B6KF1")
       -- }}}
 
     describe "\nChapter 4 - Exercise 6" $ do
       -- {{{
       it "Successfully found the WIF of 5003." $ do
         shouldBe
-          (SECP256K1.wifOf True True 5003)
-          "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN8rFTv2sfUK"
+          (Utils.showBase58EncodedBS $ SECP256K1.wifOf True True 5003)
+          (Just "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN8rFTv2sfUK")
       it "Successfully found the WIF of 2021^5." $ do
         shouldBe
-          (SECP256K1.wifOf False True $ 2021 ^ 5)
-          "91avARGdfge8E4tZfYLoxeJ5sGBdNJQH4kvjpWAxgzczjbCwxic"
+          (Utils.showBase58EncodedBS $ SECP256K1.wifOf False True $ 2021 ^ 5)
+          (Just "91avARGdfge8E4tZfYLoxeJ5sGBdNJQH4kvjpWAxgzczjbCwxic")
       it "Successfully found the WIF of 0x54321deadbeef." $ do
         shouldBe
-          (SECP256K1.wifOf True False 0x54321deadbeef)
-          "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgiuQJv1h8Ytr2S53a"
+          (Utils.showBase58EncodedBS $ SECP256K1.wifOf True False 0x54321deadbeef)
+          (Just "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgiuQJv1h8Ytr2S53a")
       -- }}}
 
     describe "\nChapter 4 - Exercise 9" $ do
       -- {{{
-      let addrStr   = show SECP256K1.testnetWallet
-          fstLetter = LBS.take 1 SECP256K1.testnetWallet
-      it ("The public address of the testnet wallet is: " ++ addrStr) $ do
-        (fstLetter == "m" || fstLetter == "n") `shouldBe` True
+      let addrStr   = Utils.showBase58EncodedBS SECP256K1.testnetWallet
+          fstLetter = take 1 <$> addrStr
+      it ("The public address of the testnet wallet is: " ++ (fromMaybe "" addrStr)) $ do
+        (fstLetter == Just "m" || fstLetter == Just "n") `shouldBe` True
       -- }}}
 
     describe "\nChapter 5 - Exercise 1" $ do
