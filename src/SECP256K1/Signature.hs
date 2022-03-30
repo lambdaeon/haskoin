@@ -4,20 +4,17 @@
 module SECP256K1.Signature where
 
 
-import           Data.Function               ((&))
-import           Data.Functor                (void)
-import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy        as LBS
 import           Data.Serializable
 import           Extension.ByteString.Parser  
 import qualified FieldElement                as FE
 import qualified FiniteFieldEllipticCurve    as FFEC
-import           Utils
 import           SECP256K1.Constants
 import           SECP256K1.S256Field
 import           SECP256K1.S256Point
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Debug       as P
+import           Utils
 
 
 data Signature = Signature

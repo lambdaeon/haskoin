@@ -9,3 +9,7 @@ import Data.ByteString.Lazy (ByteString)
 
 sourceForSecretKey :: ByteString
 sourceForSecretKey = "REPLACE_WITH_YOUR_OWN_AND_REMOVE_DUMMY_FROM_FILENAME"
+
+
+sourceForSecretKeyOfChangeAddress :: ByteString
+sourceForSecretKeyOfChangeAddress = "REPLACE_WITH_YOUR_OWN_AND_REMOVE_DUMMY_FROM_FILENAME"

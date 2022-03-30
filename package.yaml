@@ -31,9 +31,11 @@ dependencies:
 - http-conduit
 - megaparsec
 - memory
+- mtl
 - network
 - text
 - time
+- transformers
 
 library:
   source-dirs: src
@@ -60,9 +62,11 @@ executables:
     - hspec
     - megaparsec
     - memory
+    - mtl
     - network
     - text
     - time
+    - transformers
 
 tests:
   haskoin-test:
@@ -80,4 +84,6 @@ tests:
     - hspec-megaparsec
     - megaparsec
     - memory
+    - mtl
     - text
+    - transformers

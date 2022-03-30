@@ -8,11 +8,8 @@ module TxOut
   ) where
 
 
-import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy        as LBS
-import qualified Data.ByteString             as BS
 import           Data.Serializable
-import           Data.Word                   (Word)
 import           Extension.ByteString.Parser 
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Debug       as P

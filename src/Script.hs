@@ -22,21 +22,14 @@ module Script
   ) where
 
 
-import           Data.ByteString.Lazy      (ByteString)
 import qualified Data.ByteString.Lazy      as LBS
-import           Data.Functor              (void)
-import           Data.Maybe                (isJust, fromMaybe)
 import           Data.Serializable
 import           Data.Varint               (Varint (..))
 import qualified Data.Varint               as Varint
-import           Data.Void
-import           Data.Word                 (Word8)
 import qualified Extension.ByteString.Lazy as LBS
 import qualified FieldElement              as FE
-import           Text.Megaparsec           (Parsec)
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Debug     as P
-import qualified Text.Megaparsec.Byte      as BP
 import           Utils
 import           SECP256K1.S256Point
 import           SECP256K1.Signature
@@ -344,7 +337,11 @@ operationToOpCode op =
 data Command
   = Element   ByteString
   | OpCommand Operation
-  deriving (Eq, Show)
+  deriving (Eq)
+
+instance Show Command where
+  show (Element bs)   = "Element 0x" ++ (map (chr . fromIntegral) $ LBS.unpack $ encodeHex bs)
+  show (OpCommand op) = show op
 
 instance Serializable Command where
   serialize (Element   bs) =

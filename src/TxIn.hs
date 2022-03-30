@@ -6,16 +6,14 @@ module TxIn
   ( TxIn (..)
   , serializeWithCustomScriptSig
   , serializeWithoutScriptSig
+  , initWithEmptyScriptSig
+  , defaultSequence
   , sampleTxIn
   ) where
 
 
-import           Debug.Trace
-import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy        as LBS
-import qualified Data.ByteString             as BS
 import           Data.Serializable
-import           Data.Word                   (Word32)
 import           Extension.ByteString.Parser 
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Debug       as P
@@ -25,26 +23,19 @@ import           Utils
 
 
 
-sampleTxIn :: ByteString
-sampleTxIn =
-  -- {{{
-  let
-    prevTx    = integerToBS 0x813f79011acb80925dfe69b3def355fe914bd1d96a3f5f71bf8303c6a989c7d1
-    prevIndex = integralToNBytes 4 0x00000000
-    scriptSig = Script.sampleScript0BS
-    sequence  = integralToNBytes 4 0xfeffffff
-  in
-  prevTx <> prevIndex <> scriptSig <> sequence
-  -- }}}
-
-
 
 data TxIn = TxIn
   { txInPrevTx    :: ByteString
   , txInPrevIndex :: Word32
   , txInScriptSig :: ScriptSig
   , txInSequence  :: Word32
-  } deriving (Eq)
+  }
+
+instance Eq TxIn where
+  -- {{{
+  (TxIn prevTx0 prevIndex0 _ _) == (TxIn prevTx1 prevIndex1 _ _) =
+    prevTx0 == prevTx1 && prevIndex0 == prevIndex1
+  -- }}}
 
 instance Show TxIn where
   -- {{{
@@ -86,4 +77,32 @@ serializeWithoutScriptSig =
   -- }}}
 
 
+initWithEmptyScriptSig :: ByteString -> Word32 -> TxIn
+initWithEmptyScriptSig prevTx prevIndex =
+  -- {{{
+  TxIn
+    { txInPrevTx    = prevTx
+    , txInPrevIndex = prevIndex
+    , txInScriptSig = mempty
+    , txInSequence  = defaultSequence
+    }
+  -- }}}
 
+
+-- probably temporary
+defaultSequence :: Word32
+defaultSequence = 0xffffffff
+
+
+
+sampleTxIn :: ByteString
+sampleTxIn =
+  -- {{{
+  let
+    prevTx    = integerToBS 0x813f79011acb80925dfe69b3def355fe914bd1d96a3f5f71bf8303c6a989c7d1
+    prevIndex = integralToNBytes 4 0x00000000
+    scriptSig = Script.sampleScript0BS
+    sequence  = integralToNBytes 4 0xfeffffff
+  in
+  prevTx <> prevIndex <> scriptSig <> sequence
+  -- }}}

@@ -12,16 +12,19 @@ module SECP256K1
   , wifOf
   , verify
   , signWith
-  , testnetWallet
   , PubKey
   , SecKey
   , SigHash
   , Nonce
+  , testnetPublicKey
+  , testnetPrivateKey
+  , testnetWallet
+  , testnetChangePublicKey
+  , testnetChangePrivateKey
+  , testnetChangeWallet
   ) where
 
 
-import           Debug.Trace              (trace)
-import           Data.ByteString.Lazy     (ByteString)
 import qualified Data.ByteString.Lazy     as LBS
 import qualified FieldElement             as FE
 import qualified FiniteFieldEllipticCurve as FFEC
@@ -30,7 +33,7 @@ import           SECP256K1.Constants
 import           SECP256K1.Signature
 import           SECP256K1.S256Field
 import           SECP256K1.S256Point
-import           TestnetWalletPassPhrase (sourceForSecretKey)
+import           TestnetWalletPassPhrase (sourceForSecretKey, sourceForSecretKeyOfChangeAddress)
 
 
 -- UTILS
@@ -50,7 +53,7 @@ wifOf compressed testnet e =
   -- {{{
   let
     eBS = integralTo32Bytes e
-    pre = LBS.pack $ if testnet then [0xef] else [0x80]
+    pre = LBS.singleton $ if testnet then 0xef else 0x80
     suf = LBS.pack [0x01 | compressed]
   in
   toBase58WithChecksum $ pre <> eBS <> suf
@@ -94,16 +97,43 @@ signWith e_ k_ z_ = do
   -- }}}
 
 
+makePrivateKeyFromSecretBS :: ByteString -> SecKey
+makePrivateKeyFromSecretBS = fromInteger . bsToIntegerLE . hash256
+
+
+testnetPublicKey :: PubKey
+testnetPublicKey = pubKeyOf testnetPrivateKey
+
+
+testnetPrivateKey :: SecKey
+testnetPrivateKey =
+  -- {{{
+  makePrivateKeyFromSecretBS sourceForSecretKey
+  -- }}}
+
+
+testnetChangePrivateKey :: SecKey
+testnetChangePrivateKey =
+  -- {{{
+  makePrivateKeyFromSecretBS sourceForSecretKeyOfChangeAddress
+  -- }}}
+
+
 testnetWallet :: ByteString
 testnetWallet =
   -- {{{
-  let
-    sec = fromInteger $ bsToIntegerLE $ hash256 sourceForSecretKey
-    pub = pubKeyOf sec
-  in
-  address True True pub
+  address True True testnetPublicKey
   -- }}}
 
+
+testnetChangePublicKey :: PubKey
+testnetChangePublicKey = pubKeyOf testnetChangePrivateKey
+
+testnetChangeWallet :: ByteString
+testnetChangeWallet =
+  -- {{{
+  address True True testnetChangePublicKey
+  -- }}}
 
 
 

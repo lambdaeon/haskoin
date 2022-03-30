@@ -6,14 +6,9 @@
 module SECP256K1.S256Point where
 
 
-import           Debug.Trace                 (trace)
-import           Utils
 import qualified FieldElement                as FE
 import qualified FiniteFieldEllipticCurve    as FFEC
 import qualified Data.ByteString.Lazy        as LBS
-import           Data.ByteString.Lazy        (ByteString)
-import           Data.Proxy
-import qualified Data.String                 as String
 import           Extension.ByteString.Parser  
 import           GHC.TypeLits
 import           SECP256K1.Constants
@@ -21,6 +16,7 @@ import           SECP256K1.S256Field         hiding (sqrt)
 import qualified SECP256K1.S256Field         as S256Field
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Debug       as P
+import           Utils
 
 
 type S256Point =
@@ -105,10 +101,20 @@ address :: Bool -> Bool -> S256Point -> ByteString
 address compressed testnet point =
   -- {{{
   let
-    initBytes = if testnet then LBS.pack [0x6f] else LBS.pack [0x00]
+    initBytes = if testnet then LBS.singleton 0x6f else LBS.singleton 0x00
     sec       = toSEC compressed point
     hashTier1 = initBytes <> hash160 sec
   in
   toBase58WithChecksum hashTier1
   -- }}}
+
+
+addressToHash160OfSEC :: ByteString -> Maybe ByteString
+addressToHash160OfSEC addr58 = do
+  -- {{{
+  decoded <- decodeBase58WithChecksum addr58
+  return $ LBS.drop 1 decoded
+  -- }}}
+
+
 

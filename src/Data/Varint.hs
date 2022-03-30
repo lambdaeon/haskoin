@@ -6,28 +6,29 @@ module Data.Varint
   ) where
 
 
-import           Debug.Trace                 (trace)
 import           Control.Monad               (unless)
-import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy        as LBS
-import qualified Data.ByteString             as BS
 import           Data.Serializable
-import           Data.Void
-import           Data.Word                   (Word)
 import           Extension.ByteString.Parser
-import           Text.Megaparsec             (Parsec)
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Debug       as P
-import qualified Text.Megaparsec.Byte        as BP
 import           Utils
 
 
+-- | A newtype wrapper for a `Word32` to represent a varint.
 newtype Varint = Varint
   { unVarint :: Word
   } deriving (Eq, Show)
 
 instance Serializable Varint where
+  -- | Serialization of a varint into different
+  --   number of bytes, depending on the wrapped value:
+  --   * If it's less than @0xfd@ (or \(253\)), it'll be encoded in 1 byte.
+  --   * If it's less than @0x10000@ (or \(2^16\)), it'll be encoded in 3 bytes.
+  --   * If it's less than @0x100000000@ (or \(2^32\)), it'll be encoded in 5 bytes.
+  --   * Anything bigger (up to \(2^64 - 1\)) will be encoded in 9 bytes.
   serialize = serializeHelper False
+  -- | Can consume up to 9 bytes.
   parser =
     -- {{{
     let
@@ -51,6 +52,8 @@ instance Serializable Varint where
     -- }}}
 
 
+-- | Serialized a list of `Serializable` values, concat them,
+--   and prepend their count as a `Varint` for the first byte.
 serializeList :: Serializable a => [a] -> ByteString
 serializeList [] = LBS.singleton 0
 serializeList xs =
@@ -58,6 +61,8 @@ serializeList xs =
   <> foldr ((<>) . serialize) LBS.empty xs
 
 
+-- | An unexposed helper abstraction to allow `Varint` values
+--   to be serialized in either big-endian or little-endian.
 serializeHelper :: Bool -> Varint -> ByteString
 serializeHelper be (Varint n) =
   -- {{{
@@ -84,14 +89,18 @@ serializeHelper be (Varint n) =
   -- }}}
 
 
+-- | Reverse of the `serialize` instance.
 serializeBE = serializeHelper True
 
 
+-- | Parses up to 9 bytes and returns a `Num` value.
 countParser :: Num a => Parser a
 countParser = fromIntegral . unVarint <$> parser
 
 
--- from: https://stackoverflow.com/a/70429612
+-- | From: <https://stackoverflow.com/a/70429612>
+--
+--   Parses a count prefixed (varint format) list of values.
 lengthPrefixed :: Show a => Parser a -> Parser [a]
 lengthPrefixed elemParser = do
   -- {{{

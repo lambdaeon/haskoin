@@ -9,17 +9,11 @@ module Main where
 
 
 import           Debug.Trace                 (trace)
-import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy        as LBS
-import qualified Data.ByteString             as BS
 import           Data.Either                 (isRight)
-import           Data.Function               ((&))
-import           Data.Maybe                  (isJust, fromMaybe)
 import           Data.Serializable
-import           Data.String                 (fromString)
 import           Data.Varint                 (Varint (..))
 import qualified Data.Varint                 as Varint
-import           Data.Void
 import qualified Extension.ByteString.Lazy   as LBS
 import           Extension.ByteString.Parser
 import qualified Locktime
@@ -36,13 +30,13 @@ import qualified Text.Megaparsec             as P
 import qualified Tx
 import qualified TxIn
 import qualified TxOut
-import qualified Utils                       as Utils
+import           Utils
 
 main :: IO ()
 main = do
-  let ch7exM2_txId = Utils.integerToBS 0x94a23976ff3a6aeb2786f154073a0d494414bf22b28781674ff5ea48e62ef33a
-  ch7exM2_fetchedTx <- Tx.fetch True ch7exM2_txId
-  ch7exM3_txIsValid <- fromMaybe (return False) $ Tx.verify <$> ch7exM2_fetchedTx
+  let ch7exM2_txId = integerToBSLE 0x94a23976ff3a6aeb2786f154073a0d494414bf22b28781674ff5ea48e62ef33a
+  ch7exM2_fetchedTx <- runMaybeT $ Tx.fetch True ch7exM2_txId
+  ch7exM3_txIsValid <- fromMaybe (return False) $ Tx.verify <$> (myTrace "\nHERE> " ch7exM2_fetchedTx)
   hspec $ do
     let point223 x y = FFEC.fromCoords x y :: Maybe (FFEC.Point 223 0 7)
     describe "\nChapter 3 - Exercise 1" $ do
@@ -131,7 +125,7 @@ main = do
       -- {{{
       let e = 12345
           k = 1234567890
-          z = fromInteger $ Utils.bsToInteger $ Utils.hash256 "Programming Bitcoin!"
+          z = fromInteger $ bsToInteger $ hash256 "Programming Bitcoin!"
       it "Successfully signed \"Programming Bitcoin!\"." $ do
         shouldBe
           ( SECP256K1.signWith e k z
@@ -149,7 +143,7 @@ main = do
             let
               pub = SECP256K1.pubKeyOf sec
             in
-            Utils.encodeHex $ S256Point.toSEC False pub
+            encodeHex $ S256Point.toSEC False pub
       it "Successfully found the uncompressed public key associated with 5000." $ do
         (fromSecret 5000) `shouldBe` (fromString "04ffe558e388852f0120e46af2d1b370f85854a8eb0841811ece0e3e03d282d57c315dc72890a4f10a1481c031b03b351b0dc79901ca18a00cf009dbdb157a1d10")
       it "Successfully found the uncompressed public key associated with 2018^5." $ do
@@ -164,7 +158,7 @@ main = do
             let
               pub = SECP256K1.pubKeyOf sec
             in
-            Utils.encodeHex $ S256Point.toSEC True pub
+            encodeHex $ S256Point.toSEC True pub
       it "Successfully found the compressed public key associated with 5001." $ do
         (fromSecret 5001) `shouldBe` (fromString "0357a4f368868a8a6d572991e484e664810ff14c05c0fa023275251151fe0e53d1")
       it "Successfully found the compressed public key associated with 2019^5." $ do
@@ -177,7 +171,7 @@ main = do
       -- {{{
       it "DER format of the given signature was found successfully." $ do
         shouldBe
-          ( Utils.encodeHex $ serialize $ Signature.Signature
+          ( encodeHex $ serialize $ Signature.Signature
               { Signature.r = 0x37206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c6
               , Signature.s = 0x8ca63759c1157ebeaec0d03cecca119fc9a75bf8e6d0fa65c841c8e2738cdaec
               }
@@ -189,15 +183,15 @@ main = do
       -- {{{
       it "Base58 encoding of 0x7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d correctly found." $ do
         shouldBe
-          (Utils.showBase58EncodedBS $ Utils.integerToBase58 0x7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d)
+          (showBase58EncodedBS $ integerToBase58 0x7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d)
           (Just "9MA8fRQrT4u8Zj8ZRd6MAiiyaxb2Y1CMpvVkHQu5hVM6")
       it "Base58 encoding of 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c   correctly found." $ do
         shouldBe
-          (Utils.showBase58EncodedBS $ Utils.integerToBase58 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c)
+          (showBase58EncodedBS $ integerToBase58 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c)
           (Just "4fE3H2E6XMp4SsxtwinF7w9a34ooUrwWe4WsW1458Pd")
       it "Base58 encoding of 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6 correctly found." $ do
         shouldBe
-          (Utils.showBase58EncodedBS $ Utils.integerToBase58 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6)
+          (showBase58EncodedBS $ integerToBase58 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6)
           (Just "EQJsjkd6JaGwxrjEhfeqPenqHwrBmPQZjJGNSCHBkcF7")
       -- }}}
 
@@ -207,7 +201,7 @@ main = do
             let
               pub = SECP256K1.pubKeyOf sec
             in
-            Utils.showBase58EncodedBS $ S256Point.address comp test pub
+            showBase58EncodedBS $ S256Point.address comp test pub
       it "Successfully found the address corresponding to 5002." $ do
         shouldBe
           (fromSecret False True 5002)
@@ -226,21 +220,21 @@ main = do
       -- {{{
       it "Successfully found the WIF of 5003." $ do
         shouldBe
-          (Utils.showBase58EncodedBS $ SECP256K1.wifOf True True 5003)
+          (showBase58EncodedBS $ SECP256K1.wifOf True True 5003)
           (Just "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN8rFTv2sfUK")
       it "Successfully found the WIF of 2021^5." $ do
         shouldBe
-          (Utils.showBase58EncodedBS $ SECP256K1.wifOf False True $ 2021 ^ 5)
+          (showBase58EncodedBS $ SECP256K1.wifOf False True $ 2021 ^ 5)
           (Just "91avARGdfge8E4tZfYLoxeJ5sGBdNJQH4kvjpWAxgzczjbCwxic")
       it "Successfully found the WIF of 0x54321deadbeef." $ do
         shouldBe
-          (Utils.showBase58EncodedBS $ SECP256K1.wifOf True False 0x54321deadbeef)
+          (showBase58EncodedBS $ SECP256K1.wifOf True False 0x54321deadbeef)
           (Just "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgiuQJv1h8Ytr2S53a")
       -- }}}
 
     describe "\nChapter 4 - Exercise 9" $ do
       -- {{{
-      let addrStr   = Utils.showBase58EncodedBS SECP256K1.testnetWallet
+      let addrStr   = showBase58EncodedBS SECP256K1.testnetWallet
           fstLetter = take 1 <$> addrStr
       it ("The public address of the testnet wallet is: " ++ (fromMaybe "" addrStr)) $ do
         (fstLetter == Just "m" || fstLetter == Just "n") `shouldBe` True
@@ -248,9 +242,9 @@ main = do
 
     describe "\nChapter 5 - Exercise 1" $ do
       -- {{{
-      let testTx = Utils.integerToBS 0x010000000456919960ac691763688d3d3bcea9ad6ecaf875df5339e148a1fc61c6ed7a069e010000006a47304402204585bcdef85e6b1c6af5c2669d4830ff86e42dd205c0e089bc2a821657e951c002201024a10366077f87d6bce1f7100ad8cfa8a064b39d4e8fe4ea13a7b71aa8180f012102f0da57e85eec2934a82a585ea337ce2f4998b50ae699dd79f5880e253dafafb7feffffffeb8f51f4038dc17e6313cf831d4f02281c2a468bde0fafd37f1bf882729e7fd3000000006a47304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a7160121035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937feffffff567bf40595119d1bb8a3037c356efd56170b64cbcc160fb028fa10704b45d775000000006a47304402204c7c7818424c7f7911da6cddc59655a70af1cb5eaf17c69dadbfc74ffa0b662f02207599e08bc8023693ad4e9527dc42c34210f7a7d1d1ddfc8492b654a11e7620a0012102158b46fbdff65d0172b7989aec8850aa0dae49abfb84c81ae6e5b251a58ace5cfeffffffd63a5e6c16e620f86f375925b21cabaf736c779f88fd04dcad51d26690f7f345010000006a47304402200633ea0d3314bea0d95b3cd8dadb2ef79ea8331ffe1e61f762c0f6daea0fabde022029f23b3e9c30f080446150b23852028751635dcee2be669c2a1686a4b5edf304012103ffd6f4a67e94aba353a00882e563ff2722eb4cff0ad6006e86ee20dfe7520d55feffffff0251430f00000000001976a914ab0c0b2e98b1ab6dbf67d4750b0a56244948a87988ac005a6202000000001976a9143c82d7df364eb6c75be8c80df2b3eda8db57397088ac46430600
+      let testTx = integerToBS 0x010000000456919960ac691763688d3d3bcea9ad6ecaf875df5339e148a1fc61c6ed7a069e010000006a47304402204585bcdef85e6b1c6af5c2669d4830ff86e42dd205c0e089bc2a821657e951c002201024a10366077f87d6bce1f7100ad8cfa8a064b39d4e8fe4ea13a7b71aa8180f012102f0da57e85eec2934a82a585ea337ce2f4998b50ae699dd79f5880e253dafafb7feffffffeb8f51f4038dc17e6313cf831d4f02281c2a468bde0fafd37f1bf882729e7fd3000000006a47304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a7160121035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937feffffff567bf40595119d1bb8a3037c356efd56170b64cbcc160fb028fa10704b45d775000000006a47304402204c7c7818424c7f7911da6cddc59655a70af1cb5eaf17c69dadbfc74ffa0b662f02207599e08bc8023693ad4e9527dc42c34210f7a7d1d1ddfc8492b654a11e7620a0012102158b46fbdff65d0172b7989aec8850aa0dae49abfb84c81ae6e5b251a58ace5cfeffffffd63a5e6c16e620f86f375925b21cabaf736c779f88fd04dcad51d26690f7f345010000006a47304402200633ea0d3314bea0d95b3cd8dadb2ef79ea8331ffe1e61f762c0f6daea0fabde022029f23b3e9c30f080446150b23852028751635dcee2be669c2a1686a4b5edf304012103ffd6f4a67e94aba353a00882e563ff2722eb4cff0ad6006e86ee20dfe7520d55feffffff0251430f00000000001976a914ab0c0b2e98b1ab6dbf67d4750b0a56244948a87988ac005a6202000000001976a9143c82d7df364eb6c75be8c80df2b3eda8db57397088ac46430600
       it "The sample serialized tx is meant for version 1." $ do
-        P.runParser parser "" testTx `parseSatisfies` ((== 1) . Tx.getTxVersion)
+        P.runParser parser "" testTx `parseSatisfies` ((== 1) . Tx.txVersion)
       -- }}}
 
     describe "\nChapter 5 - Exercise Mine01" $ do
@@ -271,14 +265,14 @@ main = do
 
     describe "\nChapter 5 - Exercise 5" $ do
       -- {{{
-      let testTx     = Utils.integerToBS 0x010000000456919960ac691763688d3d3bcea9ad6ecaf875df5339e148a1fc61c6ed7a069e010000006a47304402204585bcdef85e6b1c6af5c2669d4830ff86e42dd205c0e089bc2a821657e951c002201024a10366077f87d6bce1f7100ad8cfa8a064b39d4e8fe4ea13a7b71aa8180f012102f0da57e85eec2934a82a585ea337ce2f4998b50ae699dd79f5880e253dafafb7feffffffeb8f51f4038dc17e6313cf831d4f02281c2a468bde0fafd37f1bf882729e7fd3000000006a47304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a7160121035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937feffffff567bf40595119d1bb8a3037c356efd56170b64cbcc160fb028fa10704b45d775000000006a47304402204c7c7818424c7f7911da6cddc59655a70af1cb5eaf17c69dadbfc74ffa0b662f02207599e08bc8023693ad4e9527dc42c34210f7a7d1d1ddfc8492b654a11e7620a0012102158b46fbdff65d0172b7989aec8850aa0dae49abfb84c81ae6e5b251a58ace5cfeffffffd63a5e6c16e620f86f375925b21cabaf736c779f88fd04dcad51d26690f7f345010000006a47304402200633ea0d3314bea0d95b3cd8dadb2ef79ea8331ffe1e61f762c0f6daea0fabde022029f23b3e9c30f080446150b23852028751635dcee2be669c2a1686a4b5edf304012103ffd6f4a67e94aba353a00882e563ff2722eb4cff0ad6006e86ee20dfe7520d55feffffff0251430f00000000001976a914ab0c0b2e98b1ab6dbf67d4750b0a56244948a87988ac005a6202000000001976a9143c82d7df364eb6c75be8c80df2b3eda8db57397088ac46430600
-          txParseRes = P.runParser parser "" $ trace ("THE BYTESTRING: " ++ show (LBS.chunksOf 2 $ Utils.encodeHex testTx)) testTx
+      let testTx     = integerToBS 0x010000000456919960ac691763688d3d3bcea9ad6ecaf875df5339e148a1fc61c6ed7a069e010000006a47304402204585bcdef85e6b1c6af5c2669d4830ff86e42dd205c0e089bc2a821657e951c002201024a10366077f87d6bce1f7100ad8cfa8a064b39d4e8fe4ea13a7b71aa8180f012102f0da57e85eec2934a82a585ea337ce2f4998b50ae699dd79f5880e253dafafb7feffffffeb8f51f4038dc17e6313cf831d4f02281c2a468bde0fafd37f1bf882729e7fd3000000006a47304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a7160121035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937feffffff567bf40595119d1bb8a3037c356efd56170b64cbcc160fb028fa10704b45d775000000006a47304402204c7c7818424c7f7911da6cddc59655a70af1cb5eaf17c69dadbfc74ffa0b662f02207599e08bc8023693ad4e9527dc42c34210f7a7d1d1ddfc8492b654a11e7620a0012102158b46fbdff65d0172b7989aec8850aa0dae49abfb84c81ae6e5b251a58ace5cfeffffffd63a5e6c16e620f86f375925b21cabaf736c779f88fd04dcad51d26690f7f345010000006a47304402200633ea0d3314bea0d95b3cd8dadb2ef79ea8331ffe1e61f762c0f6daea0fabde022029f23b3e9c30f080446150b23852028751635dcee2be669c2a1686a4b5edf304012103ffd6f4a67e94aba353a00882e563ff2722eb4cff0ad6006e86ee20dfe7520d55feffffff0251430f00000000001976a914ab0c0b2e98b1ab6dbf67d4750b0a56244948a87988ac005a6202000000001976a9143c82d7df364eb6c75be8c80df2b3eda8db57397088ac46430600
+          txParseRes = P.runParser parser "" $ trace ("THE BYTESTRING: " ++ show (LBS.chunksOf 2 $ encodeHex testTx)) testTx
           (mScriptSig, mScriptPubKey, mAmount) =
             -- {{{
             case trace ("PARSE RESULT: " ++ show txParseRes) txParseRes of
               Right tx ->
                 -- {{{
-                case (Tx.getTxTxIns tx, Tx.getTxTxOuts tx) of
+                case (Tx.txTxIns tx, Tx.txTxOuts tx) of
                   ( _ : sndIn : _, fstOut : sndOut : _) ->
                     ( Just $ TxIn.txInScriptSig      sndIn
                     , Just $ TxOut.txOutScriptPubKey fstOut
@@ -295,8 +289,8 @@ main = do
           scriptSigAns =
             -- {{{
             Just $ Script.Script
-              [ Script.Element $ Utils.integralToBS 0x304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a71601
-              , Script.Element $ Utils.integralToBS 0x035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937
+              [ Script.Element $ integralToBS 0x304402207899531a52d59a6de200179928ca900254a36b8dff8bb75f5f5d71b1cdc26125022008b422690b8461cb52c3cc30330b23d574351872b7c361e9aae3649071c1a71601
+              , Script.Element $ integralToBS 0x035d5c93d9ac96881f19ba1f686f15f009ded7c62efe85a872e6a19b43c15a2937
               ]
             -- }}}
           scriptPubKeyAns =
@@ -304,7 +298,7 @@ main = do
             Just $ Script.Script
               [ Script.OpCommand Script.OP_DUP
               , Script.OpCommand Script.OP_HASH160
-              , Script.Element $ Utils.integralToBS 0xab0c0b2e98b1ab6dbf67d4750b0a56244948a879
+              , Script.Element $ integralToBS 0xab0c0b2e98b1ab6dbf67d4750b0a56244948a879
               , Script.OpCommand Script.OP_EQUALVERIFY
               , Script.OpCommand Script.OP_CHECKSIG
               ]
@@ -354,8 +348,8 @@ main = do
           int0 = (-2002)
           int1 = (-0xdeadbeef)
           int2 = 0
-          fn0 = Utils.bsToSignedIntegralLE . Utils.signedIntegralToBSLE
-          fn1 = Utils.bsToSignedIntegral . Utils.signedIntegralToBS
+          fn0 = bsToSignedIntegralLE . signedIntegralToBSLE
+          fn1 = bsToSignedIntegral . signedIntegralToBS
       it "Successfully encoded and decoded back -2002." $ do
         fn0 int0 `shouldBe` int0
       it "Successfully encoded and decoded back -0xdeadbeef." $ do
@@ -367,7 +361,7 @@ main = do
     describe "\nChapter 6 - Exercise 3" $ do
       -- {{{
       let parseRes :: ParseResult Script.ScriptPubKey
-          parseRes = P.runParser parser "" $ Utils.integerToBS 0x767695935687
+          parseRes = P.runParser parser "" $ integerToBS 0x767695935687
           givenScriptPubKey :: Script.ScriptPubKey
           givenScriptPubKey = Script.Script $ fmap Script.OpCommand
             [ Script.OP_DUP
@@ -390,7 +384,7 @@ main = do
     describe "\nChapter 6 - Exercise 4" $ do
       -- {{{
       let bsLength = serialize $ Varint.Varint 8
-          initBS   = Utils.integerToBS 0x6e879169a77ca787
+          initBS   = integerToBS 0x6e879169a77ca787
           parseRes :: ParseResult Script.Script
           parseRes = P.runParser parser "" $ bsLength <> initBS
           ans' =
@@ -414,7 +408,7 @@ main = do
 
     describe "\nChapter 7 - Exercise Mine01" $ do
       -- {{{
-      let tx0     = Utils.integerToBS 0x020000000001019bf22550fa6b14809dd687d37dfa23afa15dd3d736b899e3f01bd28af8b6976d0000000000feffffff0200fa000000000000160014cef19aa386112bb20380ccc65051795b252355bea6e40a64080000001600142469fce274f64624cae710a75fb411c71e394ad0024730440220276416e5ce64bcc8cfcf03e947101731f7da38f47d703829ce928d6dbbac6f5a02204d5754ff26d32ff8f397a88638ad748d04c0a4c93bd8241caecb712ae8b7f240012102b72bcf2aa53793c8d0e4a61c66575a929a38035c005c755dd7580a4c0d7b6df26e702100
+      let tx0         = integerToBS 0x020000000001019bf22550fa6b14809dd687d37dfa23afa15dd3d736b899e3f01bd28af8b6976d0000000000feffffff0200fa000000000000160014cef19aa386112bb20380ccc65051795b252355bea6e40a64080000001600142469fce274f64624cae710a75fb411c71e394ad0024730440220276416e5ce64bcc8cfcf03e947101731f7da38f47d703829ce928d6dbbac6f5a02204d5754ff26d32ff8f397a88638ad748d04c0a4c93bd8241caecb712ae8b7f240012102b72bcf2aa53793c8d0e4a61c66575a929a38035c005c755dd7580a4c0d7b6df26e702100
           tx0ParseRes = P.runParser parser "" tx0 :: ParseResult Tx.Tx
       it "A real transaction on the testnet parsed successfully." $ do
         (isRight tx0ParseRes) `shouldBe` True

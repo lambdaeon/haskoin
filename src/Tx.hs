@@ -5,17 +5,15 @@
 -- MODULE
 -- {{{
 module Tx
-  ( Tx
+  ( Tx (..)
   , getTxId
-  , getTxVersion
-  , getTxTxIns
-  , getTxTxOuts
-  , getTxLocktime
-  , getTxTestnet
-  , makeTx
   , fetch
   , fee
+  , getTxInsTxOut
+  , getTxInAmount
+  , sigHashForTxIn
   , verify
+  , verifyTxIn
   , sampleTxBS
   ) where
 -- }}}
@@ -28,6 +26,9 @@ import           Control.Monad               (replicateM, forM)
 import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy        as LBS
 import qualified Data.ByteString             as BS
+import           Data.Char                   (chr)
+import           Data.Function               ((&))
+import           Data.Functor                (void)
 import           Data.Serializable
 import           Data.String                 (fromString)
 import           Data.Varint                 (Varint (..))
@@ -35,6 +36,7 @@ import qualified Data.Varint                 as Varint
 import           Data.Void
 import           Data.Word                   (Word32)
 import           Extension.ByteString.Parser  
+import qualified Extension.ByteString.Lazy   as LBS
 import           Locktime                    (Locktime)
 import qualified Locktime
 import           Network.HTTP.Simple         (httpLbs, getResponseBody, Request)
@@ -54,40 +56,17 @@ import           Utils
 
 
 data Tx = Tx
-  { txId       :: ByteString
-  , txVersion  :: Word32
+  { txVersion  :: Word32
   , txTxIns    :: [TxIn]
   , txTxOuts   :: [TxOut]
   , txLocktime :: Locktime
-  , txTestnet  :: Bool
+  , txTestnet  :: Bool -- ^ Whether the transaction is meant for the testnet.
   } deriving (Eq, Show)
 
 
-getTxId       = txId
-getTxVersion  = txVersion
-getTxTxIns    = txTxIns
-getTxTxOuts   = txTxOuts
-getTxLocktime = txLocktime
-getTxTestnet  = txTestnet
-
-
-makeTx :: Word32 -> [TxIn] -> [TxOut] -> Locktime -> Bool -> Tx
-makeTx ver ins outs locktime testnet =
-  -- {{{
-  let
-    theTx =
-      Tx
-        { txId       = LBS.empty
-        , txVersion  = ver
-        , txTxIns    = ins
-        , txTxOuts   = outs
-        , txLocktime = locktime
-        , txTestnet  = testnet
-        }
-    ser = serialize theTx
-  in
-  theTx {txId = encodeHex $ hash256 ser}
-  -- }}}
+-- | HASH256 of a serialized transaction.
+getTxId :: Tx -> ByteString
+getTxId tx = hash256 $ serialize tx
 
 
 instance Serializable Tx where
@@ -98,13 +77,18 @@ instance Serializable Tx where
   parser = do
     -- {{{
     txVersion  <- word32ParserLE "version"
+    if txVersion /= 1 then
+      void $ P.takeP
+        (Just "found the need for this discard of 2 bytes by trial and error")
+        2
+    else
+      return ()
     numTxIns   <- Varint.countParser
     txTxIns    <- replicateM numTxIns  parser
     numTxOuts  <- Varint.countParser
     txTxOuts   <- replicateM numTxOuts parser
     txLocktime <- parser
-    let txId      = LBS.empty
-        txTestnet = False
+    let txTestnet = False
     return $ Tx {..}
     -- }}}
 
@@ -118,68 +102,55 @@ serializeWithCustomTxIns bs Tx {..} =
   -- }}}
 
 
-fee :: Tx -> IO (Maybe Word)
-fee Tx {..} =
+fee :: Tx -> MaybeT IO Word
+fee Tx {..} = do
   -- {{{
-  let
-    ioMaybeWords = forM txTxIns (getTxInAmount txTestnet)
-    totOut       = foldr (\txOut acc -> txOutAmount txOut + acc) 0 txTxOuts
-  in do
-  mTotIn <- (sum <$>) . sequence <$> ioMaybeWords
-  return $ (\totIn -> totIn - totOut) <$> mTotIn
+  let totOut = foldr (\txOut acc -> txOutAmount txOut + acc) 0 txTxOuts
+  words <- forM txTxIns (\txIn -> getTxInAmount txTestnet txIn)
+  return $ (sum words) - totOut
   -- }}}
 
 
 verify :: Tx -> IO Bool
 verify tx@Tx {..} = do
   -- {{{
-  mFee <- fee tx
+  mFee <- runMaybeT $ fee tx
   case mFee of
-    Just fee -> do
+    Just fee' -> do
       let ioValids :: IO [Bool]
           ioValids = mapM (verifyTxIn tx) txTxIns
       validTxIns <- and <$> ioValids
-      return (fee >= 0 && validTxIns)
+      return (fee' >= 0 && validTxIns)
     Nothing ->
       return False
   -- }}}
 
 
---  temporary, for performance v---------v
-sigHashForTxIn :: Tx -> TxIn -> Maybe TxOut -> IO (Maybe SigHash)
-sigHashForTxIn tx@Tx {..} txIn mTxOutCache =
+--   temporary, for performance v---------v
+sigHashForTxIn :: Tx -> TxIn -> Maybe TxOut -> MaybeT IO SigHash
+sigHashForTxIn tx@Tx {..} txIn mTxOutCache = do
   -- {{{
-  let
-    ioMaybeBSs =
-      -- {{{
-      mapM
-        ( \txIn' ->
-            if txIn == txIn' then do
-              mTxOut <- case mTxOutCache of
-                          Just _  ->
-                            return mTxOutCache
-                          Nothing ->
-                            getTxInsTxOut txTestnet txIn
-              return $ fmap
-                ( \txOut ->
-                    TxIn.serializeWithCustomScriptSig
-                      (serialize $ txOutScriptPubKey txOut)
-                      txIn
+  txInsBSs <- mapM
+                ( \txIn' ->
+                    if txIn == txIn' then do
+                      txOut <- case mTxOutCache of
+                                  Just txOutCache  ->
+                                    return txOutCache
+                                  Nothing ->
+                                    getTxInsTxOut txTestnet txIn
+                      return $
+                        TxIn.serializeWithCustomScriptSig
+                          (serialize $ txOutScriptPubKey txOut)
+                          txIn
+                    else
+                      return $ TxIn.serializeWithoutScriptSig txIn
                 )
-                mTxOut
-            else
-              return $ Just $ TxIn.serializeWithoutScriptSig txIn
-        )
-        txTxIns
-      -- }}}
-  in do
-  mTxInsBS <- (LBS.concat <$>) . sequence <$> ioMaybeBSs
-  return $ do
-    txInsBS <- mTxInsBS
-    let beforeHash =
-             serializeWithCustomTxIns txInsBS tx
-          <> integralToNBytesLE 4 1 -- SIGHASH_ALL at the end.
-    return $ fromInteger $ bsToInteger $ hash256 beforeHash
+                txTxIns
+  let txInsBS = LBS.concat txInsBSs
+      beforeHash =
+           serializeWithCustomTxIns txInsBS tx
+        <> integralToNBytesLE 4 1 -- SIGHASH_ALL at the end.
+  return $ fromInteger $ bsToInteger $ hash256 beforeHash
   -- }}}
 
 
@@ -192,67 +163,67 @@ verifyTxIn tx@Tx {..} txIn = do
   -- # get the signature hash (z)
   -- # combine the current ScriptSig and the previous ScriptPubKey
   -- # evaluate the combined script
-  mTxOut   <- getTxInsTxOut txTestnet txIn
-  mSigHash <- sigHashForTxIn tx txIn mTxOut
-  case (mTxOut, mSigHash) of
-    (Just txOut, Just sigHash) ->
-      return $ Script.validate
-        (txInScriptSig     txIn )
-        (txOutScriptPubKey txOut)
-        sigHash
+  mRes <- runMaybeT $ do
+            txOut <- getTxInsTxOut txTestnet txIn
+            sigHash <- sigHashForTxIn tx txIn (Just txOut)
+            return $ Script.validate
+              (txInScriptSig     txIn )
+              (txOutScriptPubKey txOut)
+              sigHash
+  case mRes of
+    Just res ->
+      return res
     _ ->
       return False
   -- }}}
 
 
-fetch :: Bool -> ByteString -> IO (Maybe Tx)
+fetch :: Bool -> ByteString -> MaybeT IO Tx
 fetch testnet txId =
   -- {{{
   let
-    baseEndPoint =
-      if testnet then
-        "https://blockstream.info/testnet/api/"
-      else
-        "https://blockstream.info/api/"
+    baseEndPoint
+      | testnet   = "https://blockstream.info/testnet/api/"
+      | otherwise = "https://blockstream.info/api/"
     url :: Request
-    url = fromString $ filter (/= '"') $ show $ baseEndPoint <> "tx/" <> encodeHex txId <> "/hex"
+    url =   baseEndPoint <> "tx/" <> encodeHex (LBS.reverse txId) <> "/hex"
+          & LBS.unpack
+          & map (chr . fromIntegral)
+          & fromString
   in do
-  response <- httpLbs url
-  return $ do
-    resBS <- eitherToMaybe $ decodeHex $ getResponseBody response
-    eitherToMaybe $ P.runParser parser "" resBS
+  response <- liftIO $ httpLbs url
+  resBS    <-   getResponseBody response
+              & decodeHex
+              & eitherToMaybe
+              & return
+              & MaybeT
+  MaybeT                                   $
+    return                                 $
+    fmap (\tx -> tx {txTestnet = testnet}) $
+    eitherToMaybe                          $
+    P.runParser parser "" resBS
   -- }}}
 
 
-getTxInsTxOut :: Bool -> TxIn -> IO (Maybe TxOut)
+getTxInsTxOut :: Bool -> TxIn -> MaybeT IO TxOut
 getTxInsTxOut testnet TxIn {..} = do
   -- {{{
-  fetchRes <- fetch testnet txInPrevTx
-  case fetchRes of
-    Just tx ->
-      -- {{{
-      let
-        txOuts    = txTxOuts tx
-        outsCount = fromIntegral $ length txOuts
-        prevIndex = fromIntegral txInPrevIndex
-      in
-      if txInPrevIndex < outsCount then
-        return $ Just $ txOuts !! prevIndex
-      else
-        return Nothing
-      -- }}}
-    Nothing ->
-      -- {{{
-      return Nothing
-      -- }}}
+  tx <- fetch testnet txInPrevTx
+  let txOuts    = txTxOuts tx
+      outsCount = fromIntegral $ length txOuts
+      prevIndex = fromIntegral txInPrevIndex
+  if txInPrevIndex < outsCount then do
+    return $ txOuts !! prevIndex
+  else do
+    fail "invalid txout index."
   -- }}}
 
 
-getTxInAmount :: Bool -> TxIn -> IO (Maybe Word)
+getTxInAmount :: Bool -> TxIn -> MaybeT IO Word
 getTxInAmount testnet txIn = do
   -- {{{
-  mTxOut <- getTxInsTxOut testnet txIn
-  return $ fmap txOutAmount mTxOut
+  txOut <- getTxInsTxOut testnet txIn
+  return $ txOutAmount txOut
   -- }}}
 
 

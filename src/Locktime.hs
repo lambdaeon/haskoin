@@ -3,26 +3,26 @@
 
 module Locktime
   ( Locktime
+  , make
   ) where
 
 
-import           Data.ByteString.Lazy        (ByteString)
-import qualified Data.ByteString.Lazy        as LBS
-import qualified Data.ByteString             as BS
 import           Data.Serializable
 import           Extension.ByteString.Parser
 -- import        Data.Time.Clock.POSIX       (POSIXTime)
-import           Data.Word                   (Word32)
 import qualified Text.Megaparsec             as P
 import           Utils
 
 
+-- | Sum type for explicit representation of time.
 data Locktime
-  = Block Word32
-  | POSIX Word32
+  = Block Word32 -- ^ Opaque constructor meant for values less than 500 million.
+  | POSIX Word32 -- ^ Opaque constructor meant for the rest of the values.
   deriving (Eq, Show)
 
 instance Serializable Locktime where
+  -- | Little-endian serialization of the wrapped 
+  --   unsigned number in 4 bytes.
   serialize lt =
     -- {{{
     let
@@ -33,11 +33,17 @@ instance Serializable Locktime where
     in
     integralToNBytesLE 4 w32
     -- }}}
+  -- | Consumes 4 bytes and utilizes the `make` smart constructor.
   parser = do
     -- {{{
     w32 <- word32ParserLE "locktime"
-    if w32 < 500_000_000 then
-      return $ Block w32
-    else
-      return $ POSIX w32
+    return $ make w32
     -- }}}
+
+-- | Exposed smart constructor for a `Locktime` value.
+make :: Word32 -> Locktime
+make w32
+  -- {{{
+  | w32 < 500_000_000 = Block w32
+  | otherwise         = POSIX w32
+  -- }}}

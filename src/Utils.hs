@@ -9,10 +9,8 @@ module Utils
   , encodeBase58
   , decodeHex
   , decodeHexLE
-  -- , decodeBase58
-  , base58Chars
-  , getIndexOfBase58Char
-  -- 
+  , decodeBase58
+  , decodeBase58WithChecksum
   , showIntegralInBase58
   , integerToBase58
   , base58ToInteger
@@ -43,6 +41,23 @@ module Utils
   , indexedMapM
   , eitherToMaybe
   , (!?)
+  , hoistMaybe
+  , myTrace
+  , module Control.Monad.IO.Class
+  , module Control.Monad.Trans.Maybe
+  , ByteString
+  , chr
+  , foldl'
+  , (&)
+  , isJust
+  , fromMaybe
+  , fromString
+  , Text
+  , Word8
+  , Word32
+  , Word
+  , module Data.Void
+  , void
   ) where
 -- }}}
 
@@ -51,6 +66,8 @@ module Utils
 -- {{{
 import           Debug.Trace                 (trace)
 import           Control.Monad               (zipWithM)
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Maybe
 import           Crypto.Hash                 (hashWith, SHA1 (..), SHA256 (..), RIPEMD160 (..))
 import qualified Data.Binary                 as Bin
 import           Data.Bits
@@ -64,13 +81,15 @@ import qualified Data.Char                   as Char
 import           Data.Char                   (chr)
 import           Data.List                   (foldl')
 import           Data.Function               ((&))
-import           Data.Maybe                  (fromMaybe)
+import           Data.Functor                (void)
+import           Data.Maybe                  (isJust, fromMaybe)
 import           Data.Memory.Endian          (getSystemEndianness, Endianness (..))
 import           Data.String                 (fromString)
 import qualified Data.String                 as String
 import           Data.Text                   (Text)
 import qualified Data.Text                   as Text
-import           Data.Word                   (Word8, Word32)
+import           Data.Void
+import           Data.Word                   (Word8, Word32, Word)
 import qualified Extension.ByteString        as BS
 import qualified Extension.ByteString.Lazy   as LBS
 import           Numeric                     (showIntAtBase)
@@ -121,6 +140,14 @@ encodeBase58 bs =
     pre = LBS.replicate (LBS.length nulls) 0
   in
   pre <> integerToBase58 (bsToInteger rest)
+  -- }}}
+
+
+decodeBase58 :: ByteString -> Maybe ByteString
+decodeBase58 bs = do
+  -- {{{
+  num <- base58ToInteger bs
+  return $ integerToBS num
   -- }}}
 
 
@@ -181,6 +208,19 @@ toBase58WithChecksum bs =
     tier1 = bs <> cs
   in
   encodeBase58 tier1
+  -- }}}
+
+
+decodeBase58WithChecksum :: ByteString -> Maybe ByteString
+decodeBase58WithChecksum bs = do
+  -- {{{
+  decoded <- decodeBase58 bs
+  let (mainBytes, fromHash) = LBS.splitAt (LBS.length decoded - 4) decoded
+      hashOfMain = hash256 mainBytes
+  if fromHash == LBS.take 4 hashOfMain then
+    return mainBytes
+  else
+    fail "bad format."
   -- }}}
 
 
@@ -507,7 +547,11 @@ xs !? n
         n
   -- }}}
 
+
+hoistMaybe :: Applicative m => Maybe b -> MaybeT m b
+hoistMaybe = MaybeT . pure
 -- }}}
 
 
+myTrace lbl x = trace (lbl ++ show x) x
 
