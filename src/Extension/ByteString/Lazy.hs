@@ -13,6 +13,8 @@ import Data.Word               (Word8)
 
 
 
+-- | Function which aims to result in a big-endian
+--   `ByteString`, based on the endianness of the system.
 invForBE :: ByteString -> ByteString
 invForBE =
   -- {{{
@@ -24,6 +26,8 @@ invForBE =
   -- }}}
 
 
+-- | Function which aims to result in a little-endian
+--   `ByteString`, based on the endianness of the system.
 invForLE :: ByteString -> ByteString
 invForLE =
   -- {{{
@@ -35,11 +39,13 @@ invForLE =
   -- }}}
 
 
+-- | Helper function used in `chunksOf`
 build :: ((a -> [a] -> [a]) -> [a] -> [a]) -> [a]
 build g = g (:) []
 
 
--- from the `split` package.
+-- | From the @split@ package, a function that turns a `ByteString`
+--   into a list of `ByteString` values with specific byte counts.
 chunksOf :: Int -> ByteString -> [ByteString]
 chunksOf i bs =
   -- {{{
@@ -53,6 +59,7 @@ chunksOf i bs =
   -- }}}
 
 
+-- | Safe version of the original @last@ function.
 safeLast :: ByteString -> Maybe Word8
 safeLast bs =
   -- {{{
@@ -63,6 +70,8 @@ safeLast bs =
   -- }}}
 
 
+-- | Safe version of the original @init@ function
+--   (which drops the last byte).
 safeInit :: ByteString -> Maybe ByteString
 safeInit bs =
   -- {{{

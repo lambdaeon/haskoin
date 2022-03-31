@@ -23,7 +23,7 @@ import           Utils
 
 
 
-
+-- | Record type representing an input to a transaction.
 data TxIn = TxIn
   { txInPrevTx    :: ByteString
   , txInPrevIndex :: Word32
@@ -33,6 +33,8 @@ data TxIn = TxIn
 
 instance Eq TxIn where
   -- {{{
+  -- | Equality check is done only on the previous transaction's
+  --   ID, and the transaction output this input points to.
   (TxIn prevTx0 prevIndex0 _ _) == (TxIn prevTx1 prevIndex1 _ _) =
     prevTx0 == prevTx1 && prevIndex0 == prevIndex1
   -- }}}
@@ -60,6 +62,8 @@ instance Serializable TxIn where
   -- }}}
 
 
+-- | Helper serialization function to allow different serialization
+--   scheme to accomodate `SigHash` generation and script verification.
 serializeWithCustomScriptSig :: ByteString -> TxIn -> ByteString
 serializeWithCustomScriptSig customSS TxIn {..} =
   -- {{{
@@ -70,6 +74,8 @@ serializeWithCustomScriptSig customSS TxIn {..} =
   -- }}}
 
 
+-- | Special serialization scheme needed and an intermediate step of
+--   `SigHash` generation.
 serializeWithoutScriptSig :: TxIn -> ByteString
 serializeWithoutScriptSig =
   -- {{{
@@ -77,6 +83,8 @@ serializeWithoutScriptSig =
   -- }}}
 
 
+-- | A transaction input from a previous transaction's ID, along with
+--   an output index, with an empty script and `defaultSequence`.
 initWithEmptyScriptSig :: ByteString -> Word32 -> TxIn
 initWithEmptyScriptSig prevTx prevIndex =
   -- {{{
@@ -89,7 +97,7 @@ initWithEmptyScriptSig prevTx prevIndex =
   -- }}}
 
 
--- probably temporary
+-- | A default value for the sequence field of a `TxIn`. Probably temporary.
 defaultSequence :: Word32
 defaultSequence = 0xffffffff
 

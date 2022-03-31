@@ -55,6 +55,7 @@ import           Utils
 
 
 
+-- | Record type to represent a transaction.
 data Tx = Tx
   { txVersion  :: Word32
   , txTxIns    :: [TxIn]
@@ -92,6 +93,10 @@ instance Serializable Tx where
     return $ Tx {..}
     -- }}}
 
+
+-- | Helper function to allow the creation of "intermediate" transactions
+--   used for generating `SigHash` values, or verifying scripts of `TxIn`
+--   values..
 serializeWithCustomTxIns :: ByteString -> Tx -> ByteString
 serializeWithCustomTxIns bs Tx {..} =
   -- {{{
@@ -102,6 +107,7 @@ serializeWithCustomTxIns bs Tx {..} =
   -- }}}
 
 
+-- | Fee computation of a transaction (total in, minus total out).
 fee :: Tx -> MaybeT IO Word
 fee Tx {..} = do
   -- {{{
@@ -111,6 +117,9 @@ fee Tx {..} = do
   -- }}}
 
 
+-- | Verification of a transaction by making sure the fee is
+--   greater than or equal to 0, and that all `TxIn` value is
+--   also valid.
 verify :: Tx -> IO Bool
 verify tx@Tx {..} = do
   -- {{{
@@ -126,8 +135,25 @@ verify tx@Tx {..} = do
   -- }}}
 
 
---   temporary, for performance v---------v
-sigHashForTxIn :: Tx -> TxIn -> Maybe TxOut -> MaybeT IO SigHash
+-- | Generates the signature hash ("fingerprint" of the signed message)
+--   of the transaction for a specific `TxIn` of it.
+--     (1) Goes through all the `TxIn` values and serialize them with
+--         @0x00@ instead of their own `ScriptSig`.
+--     2.  When it reaches the `TxIn` in question, looks up the block explorer
+--         (if no `TxOut` is provided), takes the corresponding `TxOut`'s
+--         `ScriptPubKey` and used its serialization to serialize the `TxIn`.
+--     3.  Serializes the `Tx` with this customized serialization of the `TxIn`
+--         values.
+--     4.  Appends @SIGHASH_ALL@ with @0x01@ in 4 little-endian bytes to the
+--         custom serialization of the `Tx`.
+--     5.  Performs a `hash256` on the result.
+--     6.  Converts this hashed bytestring to the `SigHash` value
+--         (which is a `S256Order` value, which in turn is a `FieldElement`
+--         with the prime of `n` from @SECP256K1@).
+sigHashForTxIn :: Tx
+               -> TxIn
+               -> Maybe TxOut -- ^ Meant as a caching mechanism to prevent multiple queries to the block explorer (may be removed).
+               -> MaybeT IO SigHash
 sigHashForTxIn tx@Tx {..} txIn mTxOutCache = do
   -- {{{
   txInsBSs <- mapM
@@ -154,15 +180,13 @@ sigHashForTxIn tx@Tx {..} txIn mTxOutCache = do
   -- }}}
 
 
+-- | Verifies a specific `TxIn` of a transaction.
+--     (1) Finds the `SigHash` of the `TxIn` in question.
+--     2.  Uses this `SigHash` to verify the stack of its
+--         `ScriptSig` atop its corresponding `ScriptPubKey`.
 verifyTxIn :: Tx -> TxIn -> IO Bool
 verifyTxIn tx@Tx {..} txIn = do
   -- {{{
-  -- Returns whether the input has a valid signature
-  -- # get the relevant input
-  -- # grab the previous ScriptPubKey
-  -- # get the signature hash (z)
-  -- # combine the current ScriptSig and the previous ScriptPubKey
-  -- # evaluate the combined script
   mRes <- runMaybeT $ do
             txOut <- getTxInsTxOut txTestnet txIn
             sigHash <- sigHashForTxIn tx txIn (Just txOut)
@@ -178,6 +202,8 @@ verifyTxIn tx@Tx {..} txIn = do
   -- }}}
 
 
+-- | Fetches a transaction from its ID from a block explorer
+--   (<https://blockstream.info>).
 fetch :: Bool -> ByteString -> MaybeT IO Tx
 fetch testnet txId =
   -- {{{
@@ -205,6 +231,7 @@ fetch testnet txId =
   -- }}}
 
 
+-- | Fetches the `TxOut` which a `TxIn` points to.
 getTxInsTxOut :: Bool -> TxIn -> MaybeT IO TxOut
 getTxInsTxOut testnet TxIn {..} = do
   -- {{{
@@ -219,6 +246,7 @@ getTxInsTxOut testnet TxIn {..} = do
   -- }}}
 
 
+-- | Fetches the amount of satoshis available in a specific `TxIn`.
 getTxInAmount :: Bool -> TxIn -> MaybeT IO Word
 getTxInAmount testnet txIn = do
   -- {{{

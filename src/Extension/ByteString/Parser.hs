@@ -13,7 +13,7 @@ type Parser      = Parsec Void ByteString
 type ParseResult = Either (P.ParseErrorBundle ByteString Void)
 
 
--- | Parsing of a 'Word32' value from 4 bytes in little-endian.
+-- | Parsing of a `Word32` value from 4 bytes in little-endian.
 word32ParserLE :: String -- ^ Label for better parsing messages.
                -> Parser Word32
 word32ParserLE lbl = fromInteger . bsToIntegerLE <$> P.takeP (Just lbl) 4

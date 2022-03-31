@@ -42,6 +42,7 @@ module Utils
   , eitherToMaybe
   , (!?)
   , hoistMaybe
+  , fromTwoEitherValues
   , myTrace
   , module Control.Monad.IO.Class
   , module Control.Monad.Trans.Maybe
@@ -98,6 +99,7 @@ import           Numeric                     (showIntAtBase)
 
 -- FUNCTIONS
 -- {{{
+-- | List of valid character for Base58.
 base58Chars :: [Word8]
 base58Chars =
   -- {{{
@@ -131,6 +133,7 @@ getIndexOfBase58Char target =
   -- }}}
 
 
+-- | Encodes a `ByteString` into Base58. Preserves @0@ padding.
 encodeBase58 :: ByteString -> ByteString
 encodeBase58 bs =
   -- {{{
@@ -143,6 +146,8 @@ encodeBase58 bs =
   -- }}}
 
 
+-- | Decoding from a Base58 encoded `ByteString`. Fails if
+--   bytes bigger than @0x39@ (@57@) are encountered.
 decodeBase58 :: ByteString -> Maybe ByteString
 decodeBase58 bs = do
   -- {{{
@@ -151,6 +156,8 @@ decodeBase58 bs = do
   -- }}}
 
 
+-- | Converts a `ByteString` into an integer. Fails if
+--   bytes bigger than @0x39@ (@57@) are encountered.
 base58ToInteger :: ByteString -> Maybe Integer
 base58ToInteger bs =
   -- {{{
@@ -166,6 +173,8 @@ base58ToInteger bs =
   -- }}}
 
 
+-- | Pretty prints an integral number with Base58 encoding
+--   (utilizes `showIntAtBase` function from %{Numeric}).
 showIntegralInBase58 :: (Integral a, Show a) => a -> Maybe String
 showIntegralInBase58 x
   -- {{{
@@ -179,6 +188,8 @@ showIntegralInBase58 x
   -- }}}
 
 
+-- | Converts an `Integer` to an array of bytes, all between @0x00@
+--   and @0x39@ (@57@).
 integerToBase58 :: Integer -> ByteString
 integerToBase58 n =
   -- {{{
@@ -200,6 +211,8 @@ integerToBase58 n =
   -- }}}
 
 
+-- | Appends the first 4 bytes of the `hash256` of input `ByteString`
+--   to the end before encoding it in Base58.
 toBase58WithChecksum :: ByteString -> ByteString
 toBase58WithChecksum bs =
   -- {{{
@@ -211,6 +224,8 @@ toBase58WithChecksum bs =
   -- }}}
 
 
+-- | After decoding the input, checks the embedded checksum
+--   and in case of success, returns the original `ByteString`.
 decodeBase58WithChecksum :: ByteString -> Maybe ByteString
 decodeBase58WithChecksum bs = do
   -- {{{
@@ -224,6 +239,7 @@ decodeBase58WithChecksum bs = do
   -- }}}
 
 
+-- | Pretty prints a Base58 encode `ByteString`.
 showBase58EncodedBS :: ByteString -> Maybe String
 showBase58EncodedBS bs =
     LBS.unpack bs
@@ -232,6 +248,7 @@ showBase58EncodedBS bs =
 
 -- From the original "haskoin" project.
 ---------------------------------------
+-- | Converts a lazy `ByteString` to integer. Assumes big-endianness.
 bsToInteger :: ByteString -> Integer
 bsToInteger =
   -- {{{
@@ -239,6 +256,7 @@ bsToInteger =
   -- }}}
 
 
+-- | Converts a lazy `ByteString` to integer. Assumes little-endianness.
 bsToIntegerLE :: ByteString -> Integer
 bsToIntegerLE =
   -- {{{
@@ -246,6 +264,7 @@ bsToIntegerLE =
   -- }}}
 
 
+-- | Helper function. Return numbers are greater than or equal to @0@.
 bsToIntegerHelper :: Bool -> ByteString -> Integer
 bsToIntegerHelper be =
   -- {{{
@@ -256,6 +275,8 @@ bsToIntegerHelper be =
   -- }}}
 
 
+-- | Helper function for converstion of `ByteString` values to signed
+--   `Integral` values.
 bsToSignedIntegralHelper :: Integral a => Bool -> ByteString -> a
 bsToSignedIntegralHelper be bs
   -- {{{
@@ -293,12 +314,19 @@ bsToSignedIntegralHelper be bs
       in
       negMult $ fn bytes
   -- }}}
+
+
+-- | Converts a lazy `ByteString` to an `Integral`. Assumes big-endianness.
 bsToSignedIntegral :: Integral a => ByteString -> a
 bsToSignedIntegral   = bsToSignedIntegralHelper True
+
+
+-- | Converts a lazy `ByteString` to an `Integral`. Assumes little-endianness.
 bsToSignedIntegralLE :: Integral a => ByteString -> a
 bsToSignedIntegralLE = bsToSignedIntegralHelper False
 
 
+-- | Converts an `Integer` to a `ByteString` (big-endian).
 integerToBS :: Integer -> ByteString
 integerToBS =
   -- {{{
@@ -306,6 +334,7 @@ integerToBS =
   -- }}}
 
 
+-- | Converts an `Integer` to a `ByteString` (little-endian).
 integerToBSLE :: Integer -> ByteString
 integerToBSLE =
   -- {{{
@@ -313,6 +342,7 @@ integerToBSLE =
   -- }}}
 
 
+-- | Helper function for conversion of an `Integer` values to a `ByteString`.
 integerToBSHelper :: Bool -> Integer -> ByteString
 integerToBSHelper be i
   -- {{{
@@ -326,11 +356,13 @@ integerToBSHelper be i
       -- }}}
   | otherwise =
       -- {{{
-      LBS.pack [0]
+      LBS.singleton 0x00
       -- }}}
   -- }}}
 
 
+-- | Helper function for conversion of signed `Integral` values
+--   to `ByteString` values.
 signedIntegralToBSHelper :: Integral a => Bool -> a -> ByteString
 signedIntegralToBSHelper be i_
   -- {{{
@@ -381,38 +413,51 @@ signedIntegralToBSHelper be i_
   -- }}}
 
 
+-- | Converts a signed `Integral` value to `ByteString` (big-endian).
 signedIntegralToBS :: Integral a => a -> ByteString
 signedIntegralToBS = signedIntegralToBSHelper True
 
 
+-- | Converts a signed `Integral` value to `ByteString` (little-endian).
 signedIntegralToBSLE :: Integral a => a -> ByteString
 signedIntegralToBSLE = signedIntegralToBSHelper False
 
 
+-- | Encodes a lazy `ByteString` in Base16.
 encodeHex :: ByteString -> ByteString
 encodeHex = B16.encodeBase16'
 
+
+-- | Encodes a lazy `ByteString` in Base16 (little-endian).
+--   So far this function has proven useless.
 encodeHexLE :: ByteString -> ByteString
 encodeHexLE = encodeHex . LBS.invForLE
 ---------------------------------------
 
 
+-- | Decodes a lazy `ByteString` from Base16.
 decodeHex :: ByteString -> Either Text ByteString
 decodeHex = B16.decodeBase16
 
 
+-- | Decodes a lazy `ByteString` from Base16. (little-endian).
+--   Similar to `encodeHexLE`, this too has proven useless so far.
 decodeHexLE :: ByteString -> Either Text ByteString
 decodeHexLE = decodeHex . LBS.invForLE
 
 
-
+-- | A more generalized version of `integerToBS`.
 integralToBS :: Integral n => n -> ByteString
 integralToBS = integerToBS . toInteger
 
+
+-- | A more generalized version of `integerToBSLE`.
 integralToBSLE :: Integral n => n -> ByteString
 integralToBSLE = integerToBSLE . toInteger
 
 
+-- | Helper function. Ignores the given byte count if it's smaller
+--   than the minimum required number of bytes.
 integralToNBytesHelper :: Integral a => Bool -> Word -> a -> ByteString
 integralToNBytesHelper be n_ x =
   -- {{{
@@ -428,6 +473,8 @@ integralToNBytesHelper be n_ x =
   -- }}}
 
 
+-- | Converts an `Integral` value to a big-endian `ByteString`
+--   with specific number of bytes at minimum.
 integralToNBytes :: Integral n => Word -> n -> ByteString
 integralToNBytes =
   -- {{{
@@ -435,6 +482,8 @@ integralToNBytes =
   -- }}}
 
 
+-- | Converts an `Integral` value to a little-endian `ByteString`
+--   with specific number of bytes at minimum.
 integralToNBytesLE :: Integral n => Word -> n -> ByteString
 integralToNBytesLE =
   -- {{{
@@ -442,6 +491,8 @@ integralToNBytesLE =
   -- }}}
 
 
+-- | Converts an `Integral` to a big-endian `ByteString` with 32 bytes.
+--   Results in longer `ByteString` if the number needs more bytes.
 integralTo32Bytes :: Integral n => n -> ByteString
 integralTo32Bytes =
   -- {{{
@@ -449,6 +500,8 @@ integralTo32Bytes =
   -- }}}
 
 
+-- | Converts an `Integral` to a little-endian `ByteString` with 32 bytes.
+--   Results in longer `ByteString` if the number needs more bytes.
 integralTo32BytesLE :: Integral n => n -> ByteString
 integralTo32BytesLE =
   -- {{{
@@ -456,6 +509,8 @@ integralTo32BytesLE =
   -- }}}
 
 
+-- | Attempts to convert a string that consists of @[0..9]@, @[a..f]@,
+--   or @[A..F]@ to a lazy `ByteString`.
 base16StringToBS :: String -> Maybe ByteString
 base16StringToBS b16 =
   -- {{{
@@ -467,6 +522,8 @@ base16StringToBS b16 =
   -- }}}
 
 
+-- | After converting the given `Integer` to a big-endian `ByteString`,
+--   prepends it with an optional byte.
 prependIntegerWithWord8 :: Maybe Word8 -> Integer -> ByteString
 prependIntegerWithWord8 mW8 n =
   -- {{{
@@ -474,6 +531,7 @@ prependIntegerWithWord8 mW8 n =
   -- }}}
 
 
+-- | SHA1 hashing of a lazy `ByteString`.
 sha1 :: ByteString -> ByteString
 sha1 =
   -- {{{
@@ -481,12 +539,14 @@ sha1 =
   -- }}}
 
 
+-- | SHA256 hashing of a lazy `ByteString`.
 sha256 :: ByteString -> ByteString
 sha256 =
   -- {{{
   LBS.fromStrict . BA.convert . hashWith SHA256 . LBS.toStrict
   -- }}}
 
+-- | RIPEMD160 hashing of a lazy `ByteString`.
 ripemd160 :: ByteString -> ByteString
 ripemd160 =
   -- {{{
@@ -494,6 +554,7 @@ ripemd160 =
   -- }}}
 
 
+-- | HASH160 hashing of a lazy `ByteString` (@SHA256@ and then @RIPEMD160@).
 hash160 :: ByteString -> ByteString
 hash160 =
   -- {{{
@@ -501,6 +562,7 @@ hash160 =
   -- }}}
 
 
+-- | HASH256 hashing of a lazy `ByteString` (@SHA256@ twice).
 hash256 :: ByteString -> ByteString
 hash256 =
   -- {{{
@@ -508,6 +570,8 @@ hash256 =
   -- }}}
 
 
+-- | Similar to `map`, but the mapping function also requires
+--   the index of the element which is getting applied to.
 indexedMap :: (Int -> a -> b) -> [a] -> [b]
 indexedMap f xs =
   -- {{{
@@ -518,16 +582,22 @@ indexedMap f xs =
   reverse $ go 0 [] xs
   -- }}}
 
+
+-- | Similar to `indexedMap`, but the mapping function results
+--   in a monadic value.
 indexedMapM :: Monad m => (Int -> a -> m b) -> [a] -> m [b]
 indexedMapM fn xs = zipWithM fn [0 .. length xs - 1] xs
 
 
+-- | If the given `Either` value is a `Right`, `Just` is returned.
+--   `Nothing` otherwise.
 eitherToMaybe :: Either a b -> Maybe b
 eitherToMaybe (Right b) = Just b
 eitherToMaybe _         = Nothing
 
 
--- from `extra` package.
+-- | From @extra@ package. Safe version of the indexing
+--   operator `(!!)`.
 (!?) :: [a] -> Int -> Maybe a
 xs !? n
   -- {{{
@@ -548,10 +618,28 @@ xs !? n
   -- }}}
 
 
+-- | This should've been imported from %{Control.Monad.IO.Class},
+--   but there seems to be an issue. So I've redefined it for the
+--   time being.
 hoistMaybe :: Applicative m => Maybe b -> MaybeT m b
 hoistMaybe = MaybeT . pure
+
+
+-- | If both `Either` values are `Right`, a `Just` tuple is return.
+--   `Nothing` otherwise.
+fromTwoEitherValues :: Either p x -> Either q y -> Maybe (x, y)
+fromTwoEitherValues (Right x) (Right y) = Just (x, y)
+fromTwoEitherValues _         _         = Nothing
+
+
+-- | My own version of the `trace` function that shows the
+--   returned value after the given lable.
+myTrace lbl x = trace (lbl ++ show x) x
+
+
 -- }}}
 
 
-myTrace lbl x = trace (lbl ++ show x) x
+
+
 

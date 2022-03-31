@@ -26,7 +26,6 @@ library
   exposed-modules:
       Data.Serializable
       Data.Varint
-      EllipticCurve
       Extension.ByteString
       Extension.ByteString.Lazy
       Extension.ByteString.Parser

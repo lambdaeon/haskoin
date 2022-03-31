@@ -18,6 +18,7 @@ import qualified Script
 import           Utils
 
 
+-- | Record type representing an output from a transaction.
 data TxOut = TxOut
   { txOutAmount       :: Word
   , txOutScriptPubKey :: ScriptPubKey

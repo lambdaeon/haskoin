@@ -30,15 +30,16 @@ import qualified Extension.ByteString.Lazy as LBS
 import qualified FieldElement              as FE
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Debug     as P
-import           Utils
 import           SECP256K1.S256Point
 import           SECP256K1.Signature
 import           SECP256K1                 (SigHash)
 import qualified SECP256K1
+import           Utils
 
 
 -- OPERATION
 -- {{{
+-- | Sum type representing defined operations in Bitcoin's @Script@.
 data Operation
   -- {{{
   = OP_0
@@ -135,6 +136,9 @@ data Operation
   deriving (Eq, Show, Bounded)
   -- }}}
 
+
+-- | Convertion from an @OpCode@ to an `Operation` value.
+--   Returns `OP_RETURN` for invalid inputs.
 operationFromOpCode :: Word8 -> Operation
 operationFromOpCode opCode =
   -- {{{
@@ -233,6 +237,8 @@ operationFromOpCode opCode =
     _   -> OP_RETURN
   -- }}}
 
+
+-- | Inverse of `operationFromOpCode`.
 operationToOpCode :: Operation -> Word8
 operationToOpCode op =
   -- {{{
@@ -334,6 +340,7 @@ operationToOpCode op =
 
 -- COMMAND
 -- {{{
+-- | Wrapper sum type to represent elements of script stacks.
 data Command
   = Element   ByteString
   | OpCommand Operation
@@ -344,6 +351,7 @@ instance Show Command where
   show (OpCommand op) = show op
 
 instance Serializable Command where
+  -- | Serialization of `Element` values silently caps at @520@ bytes.
   serialize (Element   bs) =
     -- {{{
     let
@@ -363,6 +371,8 @@ instance Serializable Command where
     -- {{{
     LBS.singleton $ operationToOpCode op
     -- }}}
+  -- | The @OP_PUSHDATA4@ (OpCode 78) *is* handled, but at most @520@
+  --   after the length designator byte are consumed.
   parser = do
     -- {{{
     fstByte <- P.label "First byte of a script command" P.anySingle
@@ -389,6 +399,8 @@ instance Serializable Command where
 
 -- SCRIPT
 -- {{{
+-- | Newtype wrapper for a list of `Command` values. First element of
+--   the list is treated as the top.
 newtype Script = Script
   { getScript :: [Command]
   } deriving (Eq, Show)
@@ -400,6 +412,8 @@ instance Monoid Script where
   mempty = Script []
 
 instance Serializable Script where
+  -- | Results in a varint prefixed serialization, which represents
+  --   the total byte count that follows it.
   serialize (Script commands) =
     -- {{{
     let
@@ -419,10 +433,16 @@ instance Serializable Script where
 -- }}}
 
 
+-- | Type alias for readability (used in a `TxIn` field).
 type ScriptSig    = Script
+
+
+-- | Type alias for readability (used in a `TxOut` field).
 type ScriptPubKey = Script
 
 
+-- | Record type representing a stack which `Command` values are
+--   meant to affect.
 data Stack = Stack
   { stackMain :: [ByteString]
   , stackAlt  :: [ByteString]
@@ -431,20 +451,20 @@ data Stack = Stack
 emptyStack = Stack [] []
 
 
+-- | Evaluation of the resulting stack from putting the `ScriptSig` value
+--   on top of the `ScriptPubKey` stack. `SigHash` @z@ is provided by
+--   the `TxIn` verification function.
 validate :: ScriptSig -> ScriptPubKey -> SigHash -> Bool
 validate scriptSig scriptPubKey z =
-  -- ScriptSig should stack on top of ScriptPubKey.
+  -- {{{
   isJust $
     updateStack
       (scriptSig <> scriptPubKey)
       (integralToBS z)
       emptyStack
+  -- }}}
 
 
--- Reading guide for stacks:
--- from top ------------------> to bottom
--- top3 : top2 : top1 : ... : restOfStack
---
 -- Operations where "falsiness" is determined rather than
 -- being 0 (unlike the bitcoin's wiki, and like the book's
 -- codebase):
@@ -454,6 +474,16 @@ validate scriptSig scriptPubKey z =
 --   - OP_BOOLAND
 --   - OP_BOOLOR
 --
+-- | A recursive function to apply `Command` values to a stack until
+--   no `Command` values remain. In case of failure, `Nothing` is returned.
+--
+--   According to Bitcoin's wiki, some failed operations are meant to
+--   check whether stack's top value is specifically @0@ or not, while the
+--   book is checking for "falsiness" (i.e. whether @0@ or empty). I've
+--   decided to follow the book and check for falsiness.
+--
+--   Some of the affected operations are: `OP_IFDUP`,
+--   `OP_NOT`, `OP_0NOTEQUAL`, `OP_BOOLAND`, and `OP_BOOLOR`.
 updateStack :: Script -> ByteString -> Stack -> Maybe Stack
 updateStack (Script script) z stack@(Stack main alt) =
   -- {{{
@@ -1231,26 +1261,34 @@ updateStack (Script script) z stack@(Stack main alt) =
 
 -- UTILS
 -- {{{
+-- | Function rename of `signedIntegralToBSLE` for easier
+--   following of the book.
 encodeNum :: Integral a => a -> ByteString
 encodeNum = signedIntegralToBSLE
+
+
+-- | Function rename of `bsToSignedIntegralLE` for easier
+--   following of the book.
 decodeNum :: Integral a => ByteString -> a
 decodeNum = bsToSignedIntegralLE
 
 
+-- | Falsiness checker of a `ByteString` value.
 bsIsFalse :: ByteString -> Bool
 bsIsFalse bs =
   decodeNum bs == 0
 
+
+-- | Toggles the falsiness/truthiness of a `ByteString` value.
+--   Returns either @1@ or @0@.
 bsBooleanToggle :: ByteString -> ByteString
 bsBooleanToggle bs =
+  -- {{{
   if bsIsFalse bs then
     LBS.singleton 1
   else
-    LBS.empty
-
-fromTwoEitherValues :: Either p x -> Either q y -> Maybe (x, y)
-fromTwoEitherValues (Right x) (Right y) = Just (x, y)
-fromTwoEitherValues _         _         = Nothing
+    LBS.singleton 0
+  -- }}}
 -- }}}
 
 

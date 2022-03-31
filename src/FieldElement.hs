@@ -16,7 +16,12 @@ import GHC.Real (divZeroError, Ratio(..))
 import Data.List (sort)
 
 
-newtype FieldElement (m :: Nat) = FE Integer -- m is the modulus
+-- | Newtype wrapper of a field element, with its
+--   "prime" (or modulus) defined at the type level.
+--   Since the data constructor is not exposed, the
+--   wrapped numbers are guaranteed to be between @0@
+--   and @m - 1@.
+newtype FieldElement (m :: Nat) = FE Integer
 instance KnownNat m => Show (FieldElement m) where
   -- {{{
   show (FE x) =
@@ -35,6 +40,9 @@ instance Ord  (FieldElement m) where
   -- {{{
   compare (FE x) (FE y) = compare x y
   -- }}}
+-- | All operations are essentially the same as typical arithmetics.
+--   The difference being that basically a @flip mod m@ is applied
+--   at the end.
 instance KnownNat m => Num (FieldElement m) where
   -- {{{
   fromInteger x = FE $ mod x          (natVal (Proxy :: Proxy m))
@@ -72,10 +80,17 @@ instance KnownNat m => Integral (FieldElement m) where
   -- }}}
 
 
+-- | Minimal representation of the field element.
 minShow :: FieldElement m -> String
 minShow (FE x) = show x
 
 
+-- | A more efficient power function, which can also handle
+--   negative exponents. This is based on Fermat's Little Theorem
+--   which states \(a ^ (m - 1) = 1\). Meaning \(m - 1\) can be
+--   added (or reduced) to (or from) the given exponent enough
+--   times until it's positive (or smaller than @m@). This multiple
+--   addition/subraction is equivalent to performing a @mod@ with @m@.
 pow :: forall (m :: Nat) b . (KnownNat m, Integral b)
     => FieldElement m
     -> b
