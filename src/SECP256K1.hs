@@ -4,136 +4,71 @@
 {-# LANGUAGE OverloadedStrings    #-}
 
 
-module SECP256K1
-  ( n
-  , p
-  , generator
-  , pubKeyOf
-  , wifOf
-  , verify
-  , signWith
-  , PubKey
-  , SecKey
-  , SigHash
-  , Nonce
-  , testnetPublicKey
-  , testnetPrivateKey
-  , testnetWallet
-  , testnetChangePublicKey
-  , testnetChangePrivateKey
-  , testnetChangeWallet
-  ) where
+module SECP256K1 where
 
 
 import qualified Data.ByteString.Lazy     as LBS
 import qualified FieldElement             as FE
 import qualified FiniteFieldEllipticCurve as FFEC
 import           Utils
-import           SECP256K1.Constants
-import           SECP256K1.Signature
-import           SECP256K1.S256Field
-import           SECP256K1.S256Point
-import           TestnetWalletPassPhrase (sourceForSecretKey, sourceForSecretKeyOfChangeAddress)
 
 
--- UTILS
--- {{{
-type PubKey    = S256Point
-type SecKey    = S256Order
-type SigHash   = S256Order
-type Nonce     = S256Order
--- }}}
+-- | Type alias of a field element with prime `n`,
+--   representing Bitcoin's finite cyclic group from
+--   its generator point.
+type S256Order = FE.FieldElement 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 
 
-pubKeyOf :: SecKey -> PubKey
-pubKeyOf e = FFEC.scaleBy (toInteger e) generator
-
-wifOf :: Bool -> Bool -> SecKey -> ByteString
-wifOf compressed testnet e =
-  -- {{{
-  let
-    eBS = integralTo32Bytes e
-    pre = LBS.singleton $ if testnet then 0xef else 0x80
-    suf = LBS.pack [0x01 | compressed]
-  in
-  toBase58WithChecksum $ pre <> eBS <> suf
-  -- }}}
-
-verify :: PubKey -> SigHash -> Signature -> Bool
-verify pubPoint z_ Signature {r = r_, s = s} =
-  -- {{{
-  let
-    z    = toInteger z_
-    r    = toInteger r_
-    sInv = toInteger (1 `div` s)
-    u    = mod (z * sInv) n
-    v    = mod (r * sInv) n
-    uG   = FFEC.scaleBy u generator
-    vP   = FFEC.scaleBy v pubPoint 
-    uGvP = uG <> vP
-  in
-  case FFEC.getX uGvP of
-    Just r' ->
-      r == toInteger r'
-    Nothing ->
-      False
-  -- }}}
+-- | Order of Bitcoin's generator point.
+n  :: Integer
+n  = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 
 
-signWith :: SecKey -> Nonce -> SigHash -> Maybe Signature
-signWith e_ k_ z_ = do
-  -- {{{
-  let e = toInteger e_
-      k = toInteger k_
-      z = toInteger z_
-      kInv = toInteger $ 1 `div` k_
-  r_ <- FFEC.getX $ FFEC.scaleBy k generator
-  let r = toInteger r_
-      s = fromInteger $ (z + r * e) * kInv
-  return $ Signature
-    { r = r_
-    , s = s
-    }
-  -- }}}
+-- | Prime of the field element that points on Bitcoin's
+--   curve use.
+p  :: Integer
+p  = 2 ^ 256 - 2 ^ 32 - 977
 
 
-makePrivateKeyFromSecretBS :: ByteString -> SecKey
-makePrivateKeyFromSecretBS = fromInteger . bsToIntegerLE . hash256
+-- | Type alias of a field element with prime `p`.
+type S256Field = FE.FieldElement 115792089237316195423570985008687907853269984665640564039457584007908834671663
 
 
-testnetPublicKey :: PubKey
-testnetPublicKey = pubKeyOf testnetPrivateKey
+-- | Type alias for points on Bitcoin's elliptic curve.
+type S256Point =
+  FFEC.Point 115792089237316195423570985008687907853269984665640564039457584007908834671663
+             0
+             7
+
+-- | Coefficients that Bitcoin's elliptic curve uses.
+a, b :: Integer
+a = 0
+b = 7
 
 
-testnetPrivateKey :: SecKey
-testnetPrivateKey =
-  -- {{{
-  makePrivateKeyFromSecretBS sourceForSecretKey
-  -- }}}
+-- | The x coordinate of Bitcoin's generator point.
+gx :: S256Field
+gx = 0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798
 
 
-testnetChangePrivateKey :: SecKey
-testnetChangePrivateKey =
-  -- {{{
-  makePrivateKeyFromSecretBS sourceForSecretKeyOfChangeAddress
-  -- }}}
+-- | The y coordinate of Bitcoin's generator point.
+gy :: S256Field
+gy = 0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8
 
 
-testnetWallet :: ByteString
-testnetWallet =
-  -- {{{
-  address True True testnetPublicKey
-  -- }}}
+-- | Bitcoin's generator point.
+generator :: S256Point
+generator = FFEC.unsafeFromCoords gx gy
 
 
-testnetChangePublicKey :: PubKey
-testnetChangePublicKey = pubKeyOf testnetChangePrivateKey
+-- | Efficient square root function, applicable to any
+--   finite element which the remainder of its prime
+--   divided by 4 is 3 (refer to the book for a detailed
+--   explanation).
+s256FieldSqrt :: S256Field -> S256Field
+s256FieldSqrt v = v `FE.pow` ((p + 1) `div` 4)
 
-testnetChangeWallet :: ByteString
-testnetChangeWallet =
-  -- {{{
-  address True True testnetChangePublicKey
-  -- }}}
+
 
 
 

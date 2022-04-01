@@ -23,9 +23,7 @@ import qualified FieldElement                as FE
 import qualified EllipticCurve               as EC
 import qualified FiniteFieldEllipticCurve    as FFEC
 import qualified Script
-import qualified SECP256K1
-import qualified SECP256K1.S256Point         as S256Point
-import qualified SECP256K1.Signature         as Signature
+import qualified ECC
 import qualified Text.Megaparsec             as P
 import qualified Tx
 import qualified TxIn
@@ -36,7 +34,7 @@ main :: IO ()
 main = do
   let ch7exM2_txId = integerToBSLE 0x94a23976ff3a6aeb2786f154073a0d494414bf22b28781674ff5ea48e62ef33a
   ch7exM2_fetchedTx <- runMaybeT $ Tx.fetch True ch7exM2_txId
-  ch7exM3_txIsValid <- fromMaybe (return False) $ Tx.verify <$> (myTrace "\nHERE> " ch7exM2_fetchedTx)
+  ch7exM3_txIsValid <- fromMaybe (return False) $ Tx.verify <$> ch7exM2_fetchedTx
   hspec $ do
     let point223 x y = FFEC.fromCoords x y :: Maybe (FFEC.Point 223 0 7)
     describe "\nChapter 3 - Exercise 1" $ do
@@ -94,12 +92,12 @@ main = do
       it "Signature #1 is valid." $ do
         shouldBe
           ( ( \p ->
-                SECP256K1.verify
+                ECC.verify
                   p
                   0xec208baa0fc1c19f708a9ca96fdeff3ac3f230bb4a7ba4aede4942ad003c0f60
-                  ( Signature.Signature
-                      { Signature.r = 0xac8d1c87e51d0d441be8b3dd5b05c8795b48875dffe00b7ffcfac23010d3a395
-                      , Signature.s = 0x68342ceff8935ededd102dd876ffd6ba72d6a427a3edb13d26eb0781cb423c4
+                  ( ECC.Signature
+                      { ECC.r = 0xac8d1c87e51d0d441be8b3dd5b05c8795b48875dffe00b7ffcfac23010d3a395
+                      , ECC.s = 0x68342ceff8935ededd102dd876ffd6ba72d6a427a3edb13d26eb0781cb423c4
                       }
                   )
             ) <$> ex3_6_P
@@ -108,12 +106,12 @@ main = do
       it "Signature #2 is valid." $ do
         shouldBe
           ( ( \p ->
-                SECP256K1.verify
+                ECC.verify
                   p
                   0x7c076ff316692a3d7eb3c3bb0f8b1488cf72e1afcd929e29307032997a838a3d
-                  ( Signature.Signature 
-                      { Signature.r = 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c
-                      , Signature.s = 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6
+                  ( ECC.Signature 
+                      { ECC.r = 0xeff69ef2b1bd93a66ed5219add4fb51e11a840f404876325a1e8ffe0529a2c
+                      , ECC.s = 0xc7207fee197d27c618aea621406f6bf5ef6fca38681d82b2f06fddbdce6feab6
                       }
                   )
             ) <$> ex3_6_P
@@ -128,11 +126,11 @@ main = do
           z = fromInteger $ bsToInteger $ hash256 "Programming Bitcoin!"
       it "Successfully signed \"Programming Bitcoin!\"." $ do
         shouldBe
-          ( SECP256K1.signWith e k z
+          ( ECC.signWith e k z
           )
-          ( Just $ Signature.Signature
-              { Signature.r = 0x2b698a0f0a4041b77e63488ad48c23e8e8838dd1fb7520408b121697b782ef22
-              , Signature.s = 0x1dbc63bfef4416705e602a7b564161167076d8b20990a0f26f316cff2cb0bc1a
+          ( Just $ ECC.Signature
+              { ECC.r = 0x2b698a0f0a4041b77e63488ad48c23e8e8838dd1fb7520408b121697b782ef22
+              , ECC.s = 0x1dbc63bfef4416705e602a7b564161167076d8b20990a0f26f316cff2cb0bc1a
               }
           )
       -- }}}
@@ -141,9 +139,9 @@ main = do
       -- {{{
       let fromSecret sec =
             let
-              pub = SECP256K1.pubKeyOf sec
+              pub = ECC.pubKeyOf sec
             in
-            encodeHex $ S256Point.toSEC False pub
+            encodeHex $ ECC.toSEC False pub
       it "Successfully found the uncompressed public key associated with 5000." $ do
         (fromSecret 5000) `shouldBe` (fromString "04ffe558e388852f0120e46af2d1b370f85854a8eb0841811ece0e3e03d282d57c315dc72890a4f10a1481c031b03b351b0dc79901ca18a00cf009dbdb157a1d10")
       it "Successfully found the uncompressed public key associated with 2018^5." $ do
@@ -156,9 +154,9 @@ main = do
       -- {{{
       let fromSecret sec =
             let
-              pub = SECP256K1.pubKeyOf sec
+              pub = ECC.pubKeyOf sec
             in
-            encodeHex $ S256Point.toSEC True pub
+            encodeHex $ ECC.toSEC True pub
       it "Successfully found the compressed public key associated with 5001." $ do
         (fromSecret 5001) `shouldBe` (fromString "0357a4f368868a8a6d572991e484e664810ff14c05c0fa023275251151fe0e53d1")
       it "Successfully found the compressed public key associated with 2019^5." $ do
@@ -171,9 +169,9 @@ main = do
       -- {{{
       it "DER format of the given signature was found successfully." $ do
         shouldBe
-          ( encodeHex $ serialize $ Signature.Signature
-              { Signature.r = 0x37206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c6
-              , Signature.s = 0x8ca63759c1157ebeaec0d03cecca119fc9a75bf8e6d0fa65c841c8e2738cdaec
+          ( encodeHex $ serialize $ ECC.Signature
+              { ECC.r = 0x37206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c6
+              , ECC.s = 0x8ca63759c1157ebeaec0d03cecca119fc9a75bf8e6d0fa65c841c8e2738cdaec
               }
           )
           "3045022037206a0610995c58074999cb9767b87af4c4978db68c06e8e6e81d282047a7c60221008ca63759c1157ebeaec0d03cecca119fc9a75bf8e6d0fa65c841c8e2738cdaec"
@@ -199,9 +197,9 @@ main = do
       -- {{{
       let fromSecret comp test sec =
             let
-              pub = SECP256K1.pubKeyOf sec
+              pub = ECC.pubKeyOf sec
             in
-            showBase58EncodedBS $ S256Point.address comp test pub
+            showBase58EncodedBS $ ECC.address comp test pub
       it "Successfully found the address corresponding to 5002." $ do
         shouldBe
           (fromSecret False True 5002)
@@ -220,21 +218,21 @@ main = do
       -- {{{
       it "Successfully found the WIF of 5003." $ do
         shouldBe
-          (showBase58EncodedBS $ SECP256K1.wifOf True True 5003)
+          (showBase58EncodedBS $ ECC.wifOf True True 5003)
           (Just "cMahea7zqjxrtgAbB7LSGbcQUr1uX1ojuat9jZodMN8rFTv2sfUK")
       it "Successfully found the WIF of 2021^5." $ do
         shouldBe
-          (showBase58EncodedBS $ SECP256K1.wifOf False True $ 2021 ^ 5)
+          (showBase58EncodedBS $ ECC.wifOf False True $ 2021 ^ 5)
           (Just "91avARGdfge8E4tZfYLoxeJ5sGBdNJQH4kvjpWAxgzczjbCwxic")
       it "Successfully found the WIF of 0x54321deadbeef." $ do
         shouldBe
-          (showBase58EncodedBS $ SECP256K1.wifOf True False 0x54321deadbeef)
+          (showBase58EncodedBS $ ECC.wifOf True False 0x54321deadbeef)
           (Just "KwDiBf89QgGbjEhKnhXJuH7LrciVrZi3qYjgiuQJv1h8Ytr2S53a")
       -- }}}
 
     describe "\nChapter 4 - Exercise 9" $ do
       -- {{{
-      let addrStr   = showBase58EncodedBS SECP256K1.testnetWallet
+      let addrStr   = showBase58EncodedBS ECC.testnetWallet
           fstLetter = take 1 <$> addrStr
       it ("The public address of the testnet wallet is: " ++ (fromMaybe "" addrStr)) $ do
         (fstLetter == Just "m" || fstLetter == Just "n") `shouldBe` True

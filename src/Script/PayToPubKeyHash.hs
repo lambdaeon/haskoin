@@ -6,10 +6,8 @@ import qualified Data.ByteString.Lazy as LBS
 import           Data.Serializable
 import qualified Locktime
 import           Script
-import           SECP256K1               (signWith)
-import qualified SECP256K1
-import           SECP256K1.S256Point     (addressToHash160OfSEC)
-import qualified SECP256K1.S256Point     as S256Point
+import           ECC                     (signWith, addressToHash160OfSEC)
+import qualified ECC
 import           TxIn                    (TxIn (..))
 import qualified TxIn
 import           TxOut                   (TxOut (..))
@@ -19,6 +17,8 @@ import qualified Tx
 import           Utils
 
 
+-- | Takes the HASH160 of an SEC formatted public key point,
+--   and returns the `ScriptPubKey` for the p2pkh scheme.
 fromHash160 :: ByteString -> ScriptPubKey
 fromHash160 bs =
   -- {{{
@@ -32,6 +32,7 @@ fromHash160 bs =
   -- }}}
 
 
+-- | Takes a Bitcoin address, and returns the p2pkh `ScriptPubKey`.
 fromAddress :: ByteString -> Maybe ScriptPubKey
 fromAddress addr58 = do
   -- {{{
@@ -40,6 +41,9 @@ fromAddress addr58 = do
   -- }}}
 
 
+-- | A function to create a transaction which sends some satoshis
+--   from the testnet wallet to another address, and sends back the
+--   change to the testnet's change wallet.
 testnetPayTo :: ByteString -> Word32 -> Word -> ByteString -> MaybeT IO Tx
 testnetPayTo prevTx prevIndex targetAmount toAddr = do
   let txIn = TxIn.initWithEmptyScriptSig prevTx prevIndex
@@ -49,7 +53,7 @@ testnetPayTo prevTx prevIndex targetAmount toAddr = do
     fail "insufficient funds."
   else do
     targetScriptPubKey <- hoistMaybe $ fromAddress toAddr
-    changeScriptPubKey <- hoistMaybe $ fromAddress SECP256K1.testnetChangeWallet
+    changeScriptPubKey <- hoistMaybe $ fromAddress ECC.testnetChangeWallet
     let targetTxOut = TxOut targetAmount targetScriptPubKey
         changeTxOut = TxOut changeAmount changeScriptPubKey
         initTx      = Tx
@@ -63,9 +67,9 @@ testnetPayTo prevTx prevIndex targetAmount toAddr = do
                $ (fromInteger . bsToInteger . LBS.fromStrict) <$> getRandomBytes 8
     sigHash <- Tx.sigHashForTxIn initTx txIn (Just txInsTxOut)
     der     <-   hoistMaybe
-               $ serialize <$> signWith SECP256K1.testnetPrivateKey nonce sigHash
+               $ serialize <$> signWith ECC.testnetPrivateKey nonce sigHash
     let sig       = der `LBS.snoc` 0x01
-        sec       = S256Point.toSEC True SECP256K1.testnetPublicKey
+        sec       = ECC.toSEC True ECC.testnetPublicKey
         scriptSig = Script [Script.Element sig, Script.Element sec]
         fnlTxIn   = txIn {txInScriptSig = scriptSig}
     return $ initTx {txTxIns = [fnlTxIn]}

@@ -465,15 +465,6 @@ validate scriptSig scriptPubKey z =
   -- }}}
 
 
--- Operations where "falsiness" is determined rather than
--- being 0 (unlike the bitcoin's wiki, and like the book's
--- codebase):
---   - OP_IFDUP
---   - OP_NOT
---   - OP_0NOTEQUAL
---   - OP_BOOLAND
---   - OP_BOOLOR
---
 -- | A recursive function to apply `Command` values to a stack until
 --   no `Command` values remain. In case of failure, `Nothing` is returned.
 --

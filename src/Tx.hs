@@ -41,8 +41,7 @@ import           Locktime                    (Locktime)
 import qualified Locktime
 import           Network.HTTP.Simple         (httpLbs, getResponseBody, Request)
 import qualified Script
-import           SECP256K1                   (PubKey, SecKey, SigHash)
-import qualified SECP256K1
+import           ECC                         (SigHash)
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Debug       as P
 import           TxIn                        (TxIn (..))
