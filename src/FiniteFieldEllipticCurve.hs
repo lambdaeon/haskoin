@@ -2,6 +2,7 @@
 {-# LANGUAGE KindSignatures      #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedStrings    #-}
 
 
 module FiniteFieldEllipticCurve
@@ -18,6 +19,7 @@ module FiniteFieldEllipticCurve
 import Data.Proxy
 import GHC.TypeLits
 import Data.Group
+import Data.Text
 import FieldElement (FieldElement)
 import qualified FieldElement as FE
 
@@ -100,20 +102,20 @@ instance (KnownNat p, KnownNat a, KnownNat b) => Group (Point p a b) where
 instance (KnownNat p, KnownNat a, KnownNat b) => Abelian (Point p a b)
 
 
--- | As the point may lie in infinitey, the output is a `Maybe`.
-getX :: Point p a b -> Maybe (FieldElement p)
-getX  Inf        = Nothing
-getX (Point x _) = Just x
+-- | As the point may lie in infinitey, the output is an `Either`.
+getX :: Point p a b -> Either Text (FieldElement p)
+getX  Inf        = Left "point at infinity."
+getX (Point x _) = Right x
 
-getY  Inf        = Nothing
-getY (Point _ y) = Just y
+getY  Inf        = Left "point at infinity."
+getY (Point _ y) = Right y
 
 
 -- | Smart constructor for the `Point p a b` datatype.
 fromCoords :: forall (p :: Nat) (a :: Nat) (b :: Nat) . (KnownNat p, KnownNat a, KnownNat b)
            => FieldElement p
            -> FieldElement p
-           -> Maybe (Point p a b)
+           -> Either Text (Point p a b)
 fromCoords x y =
   -- {{{
   let
@@ -121,9 +123,9 @@ fromCoords x y =
     b = natVal (Proxy :: Proxy b)
   in
   if y ^ 2 == x ^ 3 + fromInteger a * x + fromInteger b then
-    Just $ Point x y
+    Right $ Point x y
   else
-    Nothing
+    Left "given coordinates do not result in a point on the corresponding curve."
   -- }}}
 
 

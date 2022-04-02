@@ -33,7 +33,7 @@ fromHash160 bs =
 
 
 -- | Takes a Bitcoin address, and returns the p2pkh `ScriptPubKey`.
-fromAddress :: ByteString -> Maybe ScriptPubKey
+fromAddress :: ByteString -> Either Text ScriptPubKey
 fromAddress addr58 = do
   -- {{{
   hashOfSEC <- addressToHash160OfSEC addr58
@@ -44,34 +44,47 @@ fromAddress addr58 = do
 -- | A function to create a transaction which sends some satoshis
 --   from the testnet wallet to another address, and sends back the
 --   change to the testnet's change wallet.
-testnetPayTo :: ByteString -> Word32 -> Word -> ByteString -> MaybeT IO Tx
+testnetPayTo :: ByteString -> Word32 -> Word -> ByteString -> ExceptT Text IO Tx
 testnetPayTo prevTx prevIndex targetAmount toAddr = do
-  let txIn = TxIn.initWithEmptyScriptSig prevTx prevIndex
+  -- {{{
+  let fixedFee = 100
+      txIn     = TxIn.initWithEmptyScriptSig prevTx prevIndex
   txInsTxOut <- Tx.getTxInsTxOut True txIn
-  let changeAmount = txOutAmount txInsTxOut - targetAmount
+  let changeAmount = txOutAmount txInsTxOut - targetAmount - fixedFee
   if changeAmount < 0 then
     fail "insufficient funds."
   else do
-    targetScriptPubKey <- hoistMaybe $ fromAddress toAddr
-    changeScriptPubKey <- hoistMaybe $ fromAddress ECC.testnetChangeWallet
+    targetScriptPubKey <- except $ fromAddress toAddr
+    changeScriptPubKey <- except $ fromAddress ECC.testnetChangeWallet
     let targetTxOut = TxOut targetAmount targetScriptPubKey
         changeTxOut = TxOut changeAmount changeScriptPubKey
         initTx      = Tx
           { txVersion  = 1
           , txTxIns    = [txIn]
-          , txTxOuts   = [targetTxOut, changeTxOut]
+          , txTxOuts   =
+              if changeAmount == 0 then
+                [ targetTxOut
+                ]
+              else
+                [ targetTxOut
+                , changeTxOut
+                ]
           , txLocktime = Locktime.make 0
           , txTestnet  = True
           }
     nonce   <-   liftIO
-               $ (fromInteger . bsToInteger . LBS.fromStrict) <$> getRandomBytes 8
+               $ fromInteger . bsToInteger . LBS.fromStrict <$> getRandomBytes 8
     sigHash <- Tx.sigHashForTxIn initTx txIn (Just txInsTxOut)
-    der     <-   hoistMaybe
+    der     <-   except
                $ serialize <$> signWith ECC.testnetPrivateKey nonce sigHash
     let sig       = der `LBS.snoc` 0x01
         sec       = ECC.toSEC True ECC.testnetPublicKey
         scriptSig = Script [Script.Element sig, Script.Element sec]
         fnlTxIn   = txIn {txInScriptSig = scriptSig}
-    return $ initTx {txTxIns = [fnlTxIn]}
+    liftIO $ putStrLn "\n\n************************************"
+    liftIO $ print $ encodeHex $ serialize fnlTxIn
+    liftIO $ putStrLn "************************************\n\n"
+    return $ initTx {txTxIns = [myTrace "\nTHE FINAL TXIN: " fnlTxIn]}
+  -- }}}
 
 

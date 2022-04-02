@@ -2,6 +2,7 @@
 {-# LANGUAGE KindSignatures      #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
+{-# LANGUAGE OverloadedStrings   #-}
 
 
 module Script
@@ -26,14 +27,13 @@ import qualified Data.ByteString.Lazy      as LBS
 import           Data.Serializable
 import           Data.Varint               (Varint (..))
 import qualified Data.Varint               as Varint
+import           ECC                       (SigHash)
+import qualified ECC
 import qualified Extension.ByteString.Lazy as LBS
 import qualified FieldElement              as FE
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Debug     as P
-import           SECP256K1.S256Point
-import           SECP256K1.Signature
-import           SECP256K1                 (SigHash)
-import qualified SECP256K1
+import           SECP256K1
 import           Utils
 
 
@@ -347,7 +347,7 @@ data Command
   deriving (Eq)
 
 instance Show Command where
-  show (Element bs)   = "Element 0x" ++ (map (chr . fromIntegral) $ LBS.unpack $ encodeHex bs)
+  show (Element bs)   = "Element 0x" ++ map (chr . fromIntegral) (LBS.unpack $ encodeHex bs)
   show (OpCommand op) = show op
 
 instance Serializable Command where
@@ -446,7 +446,10 @@ type ScriptPubKey = Script
 data Stack = Stack
   { stackMain :: [ByteString]
   , stackAlt  :: [ByteString]
-  } deriving (Eq, Show)
+  } deriving (Eq)
+
+instance Show Stack where
+  show (Stack main _) = show $ encodeHex <$> main
 
 emptyStack = Stack [] []
 
@@ -454,10 +457,10 @@ emptyStack = Stack [] []
 -- | Evaluation of the resulting stack from putting the `ScriptSig` value
 --   on top of the `ScriptPubKey` stack. `SigHash` @z@ is provided by
 --   the `TxIn` verification function.
-validate :: ScriptSig -> ScriptPubKey -> SigHash -> Bool
+validate :: ScriptSig -> ScriptPubKey -> SigHash -> Either Text ()
 validate scriptSig scriptPubKey z =
   -- {{{
-  isJust $
+  void $
     updateStack
       (scriptSig <> scriptPubKey)
       (integralToBS z)
@@ -466,7 +469,7 @@ validate scriptSig scriptPubKey z =
 
 
 -- | A recursive function to apply `Command` values to a stack until
---   no `Command` values remain. In case of failure, `Nothing` is returned.
+--   no `Command` values remain. In case of failure, `Left` is returned.
 --
 --   According to Bitcoin's wiki, some failed operations are meant to
 --   check whether stack's top value is specifically @0@ or not, while the
@@ -475,7 +478,7 @@ validate scriptSig scriptPubKey z =
 --
 --   Some of the affected operations are: `OP_IFDUP`,
 --   `OP_NOT`, `OP_0NOTEQUAL`, `OP_BOOLAND`, and `OP_BOOLOR`.
-updateStack :: Script -> ByteString -> Stack -> Maybe Stack
+updateStack :: Script -> ByteString -> Stack -> Either Text Stack
 updateStack (Script script) z stack@(Stack main alt) =
   -- {{{
   let
@@ -483,7 +486,7 @@ updateStack (Script script) z stack@(Stack main alt) =
     appendMain bs  rest = updateStack (Script rest) z $ Stack (bs : main) alt
     appendAlt  bs  rest = updateStack (Script rest) z $ Stack main (bs : alt)
     appendNum  x        = appendMain (encodeNum x)
-    genericFail         = fail "invalid script."
+    genericFail         = Left "invalid script."
     opOnHead    op rest =
       -- {{{
       case main of
@@ -521,18 +524,21 @@ updateStack (Script script) z stack@(Stack main alt) =
         )
         rest
       -- }}}
-    performAndVerify fstCmd rest = do
+    performAndVerify fstCmd rest =
       -- {{{
-      newStack <- updateStack (Script $ OpCommand fstCmd : rest) z stack
-      updateStack
-        (Script $ OpCommand OP_VERIFY : rest)
-        z
-        newStack
+      updateStack (Script $ OpCommand fstCmd : OpCommand OP_VERIFY : rest) z stack
       -- }}}
   in
-  case script of
+  case seq (myTrace "\n\n\nTHE STACK: " stack) (myTrace "\nTHE SCRIPT CMDs: " script) of
     []                                      ->
-      Just stack
+      case main of
+        [] ->
+          Left "no elements remained in stack."
+        result : _ ->
+          if bsIsFalse result then
+            Left "stack reduced to 0x00."
+          else
+            Right stack
     Element elemBS                   : cmds ->
       appendMain elemBS cmds
     OpCommand OP_0                   : cmds ->
@@ -584,7 +590,7 @@ updateStack (Script script) z stack@(Stack main alt) =
       case main of
         [] ->
           -- {{{
-          fail "empty stack."
+          Left "empty stack."
           -- }}}
         headBS : restOfMain ->
           -- {{{
@@ -604,7 +610,11 @@ updateStack (Script script) z stack@(Stack main alt) =
             -- Skip to the corresponding OP_ELSE or OP_ENDIF:
             -- {{{
             let
-              go :: Word -> Bool -> [Command] -> [Command] -> Maybe (Script, Stack)
+              go :: Word
+                 -> Bool
+                 -> [Command]
+                 -> [Command]
+                 -> Either Text (Script, Stack)
               go nestLevel inElse acc remainingCmds =
               -- Seek for OP_ELSE or OP_ENDIF.
               -- In case of OP_ELSE, accumulate
@@ -613,7 +623,7 @@ updateStack (Script script) z stack@(Stack main alt) =
                 case remainingCmds of
                   [] ->
                     -- {{{
-                    fail "if block without closure."
+                    Left "if block without closure."
                     -- }}}
                   currCmd : restOfCmds ->
                     -- {{{
@@ -649,7 +659,7 @@ updateStack (Script script) z stack@(Stack main alt) =
                           -- {{{
                           if inElse then
                             -- {{{
-                            fail "if block without closure."
+                            Left "if block without closure."
                             -- }}}
                           else
                             -- {{{
@@ -671,7 +681,7 @@ updateStack (Script script) z stack@(Stack main alt) =
                             -- }}}
                           else
                             -- {{{
-                            Just (Script restOfCmds, Stack restOfMain alt)
+                            Right (Script restOfCmds, Stack restOfMain alt)
                             -- }}}
                           -- }}}
                         else
@@ -687,16 +697,16 @@ updateStack (Script script) z stack@(Stack main alt) =
               -- }}}
             in
             case go 0 False [] cmds of
-              Nothing ->
-                fail "invalid conditional."
-              Just (newScript, newStack) ->
+              Left err ->
+                Left err
+              Right (newScript, newStack) ->
                 updateStack newScript z newStack
             -- }}}
           else
             -- Accumulate up until the corresponding OP_ELSE or OP_ENDIF:
             -- {{{
             let
-              go :: Word -> [Command] -> [Command] -> Maybe (Script, Stack)
+              go :: Word -> [Command] -> [Command] -> Either Text (Script, Stack)
               go nestLevel acc remainingCmds =
               -- Keep accumulating up until an
               -- OP_ELSE or OP_ENDIF is found.
@@ -704,7 +714,7 @@ updateStack (Script script) z stack@(Stack main alt) =
                 case remainingCmds of
                   [] ->
                     -- {{{
-                    fail "if block without closure."
+                    Left "if block without closure."
                     -- }}}
                   currCmd : restOfCmds ->
                     -- {{{
@@ -760,9 +770,9 @@ updateStack (Script script) z stack@(Stack main alt) =
               -- }}}
             in
             case go 0 [] cmds of
-              Nothing ->
-                fail "invalid conditional."
-              Just (newScript, newStack) ->
+              Left err ->
+                Left err
+              Right (newScript, newStack) ->
                 updateStack newScript z newStack
             -- }}}
           -- }}}
@@ -772,7 +782,7 @@ updateStack (Script script) z stack@(Stack main alt) =
       case main of
         [] ->
           -- {{{
-          fail "empty stack."
+          Left "empty stack."
           -- }}}
         headBS : restOfMain ->
           -- {{{
@@ -795,15 +805,15 @@ updateStack (Script script) z stack@(Stack main alt) =
           if bsIsFalse headBS then
             genericFail
           else
-            updateStack (Script cmds) z (Stack restOfMain alt)
+            myTrace "\n\n%%%%%%%%%%%%%%%%%%%%\nRESULT AFTER VERIFY: " $ updateStack (Script cmds) z (Stack restOfMain alt)
       -- }}}
     OpCommand OP_RETURN              : cmds ->
-      fail "op_return, or invalid command."
+      Left "op_return, or invalid command."
     OpCommand OP_TOALTSTACK          : cmds ->
       -- {{{
       case main of
         [] ->
-          fail "empty stack."
+          Left "empty stack."
         mainHead : restOfMain ->
           updateStack (Script cmds) z (Stack restOfMain (mainHead : alt))
       -- }}}
@@ -811,7 +821,7 @@ updateStack (Script script) z stack@(Stack main alt) =
       -- {{{
       case alt of
         [] ->
-          fail "empty alt stack."
+          Left "empty alt stack."
         altHead : restOfAlt ->
           updateStack (Script cmds) z (Stack (altHead : main) restOfAlt)
       -- }}}
@@ -1188,26 +1198,25 @@ updateStack (Script script) z stack@(Stack main alt) =
       opOnHead hash256 cmds
       -- }}}
     OpCommand OP_CODESEPARATOR       : cmds ->
-      fail "op_codeseparator" -- TODO
+      Left "op_codeseparator" -- TODO
     OpCommand OP_CHECKSIG            : cmds ->
       -- {{{
       case main of
         secBS : initDER : restOfMain -> do
           -- {{{
-          derBS <- LBS.safeInit initDER
-          let pubRes :: Either (P.ParseErrorBundle ByteString Void) SECP256K1.PubKey
-              pubRes = P.runParser secParser "" secBS
-              sigRes :: Either (P.ParseErrorBundle ByteString Void) Signature
-              sigRes = P.runParser parser    "" derBS
-              zMsg :: SECP256K1.SigHash
+          derBS     <- explainMaybe "invalid DER." $ LBS.safeInit initDER
+          pubKey    <-   P.runParser ECC.secParser "" secBS
+                       & mapLeft (const "failed to parse sec formatted public key.")
+          signature <-   P.runParser parser "" derBS 
+                       & mapLeft (const "failed to parse der formatted signature.")
+          let zMsg :: ECC.SigHash
               zMsg = fromInteger $ bsToInteger z
-          (pubKey, signature) <- fromTwoEitherValues pubRes sigRes
-          let appendResult oneOrZero =
+              appendResult oneOrZero =
                 updateStack
                   (Script cmds)
                   z
                   (Stack (oneOrZero : restOfMain) alt)
-          if SECP256K1.verify pubKey zMsg signature then
+          if ECC.verify pubKey zMsg signature then
             appendResult $ LBS.singleton 1
           else
             appendResult $ LBS.singleton 0

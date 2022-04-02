@@ -6,6 +6,7 @@ module TxIn
   ( TxIn (..)
   , serializeWithCustomScriptSig
   , serializeWithoutScriptSig
+  , reversePrevId
   , initWithEmptyScriptSig
   , defaultSequence
   , sampleTxIn
@@ -41,10 +42,18 @@ instance Eq TxIn where
 
 instance Show TxIn where
   -- {{{
-  show TxIn{..} = show $
-       encodeHex txInPrevTx
-    <> ":"
-    <> encodeHex (integralToBSLE txInPrevIndex)
+  show TxIn{..} =
+       "TxIn {"
+    ++ map
+         (chr . fromIntegral)
+         ( LBS.unpack $
+                encodeHex txInPrevTx
+             <> ":"
+             <> encodeHex (integralToBSLE txInPrevIndex)
+             <> ", "
+         )
+    ++ show txInScriptSig
+    ++ "}"
   -- }}}
 
 instance Serializable TxIn where
@@ -81,6 +90,16 @@ serializeWithoutScriptSig =
   -- {{{
   serializeWithCustomScriptSig $ LBS.singleton 0
   -- }}}
+
+
+-- | Reverses the previous transaction's ID which the given `TxIn` value
+--   points to.
+reversePrevId :: TxIn -> TxIn
+reversePrevId txIn@TxIn {..} =
+  -- {{{
+  txIn {txInPrevTx = LBS.reverse txInPrevTx}
+  -- }}}
+
 
 
 -- | A transaction input from a previous transaction's ID, along with

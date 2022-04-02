@@ -54,6 +54,27 @@ runStackTest() { # Run the tests for the given exercise.
   # }}}
 }
 
+runLocalStackTest() { # Run the tests for the given exercise locally.
+  # {{{
+  case $1 in
+    all)
+      echo -e "Running all the tests:\n"
+      stack test --fast
+      ;;
+    *)
+      argument="Chapter $1 - Exercise $2"
+      echo -e "Running tests for $argument:\n"
+      final="stack test --fast --test-arguments='--match \"$argument\"'"
+      touch test.sh
+      echo $final >> test.sh
+      # source test.sh
+      sh test.sh
+      rm test.sh
+      ;;
+  esac
+  # }}}
+}
+
 lint() {
   # {{{
   echo -e "/-------------------------------- hlint --------------------------------\\"
@@ -77,6 +98,12 @@ case $1 in
     # {{{
     lintAndCopy
     runStackTest $2 $3
+    ;;
+    # }}}
+  localTest)
+    # {{{
+    lint
+    runLocalStackTest $2 $3
     ;;
     # }}}
   noLint)

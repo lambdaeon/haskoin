@@ -14,6 +14,7 @@ module Utils
   , showIntegralInBase58
   , integerToBase58
   , base58ToInteger
+  , base58StringToBS
   , toBase58WithChecksum
   , showBase58EncodedBS
   , bsToInteger
@@ -43,9 +44,12 @@ module Utils
   , (!?)
   , hoistMaybe
   , fromTwoEitherValues
+  , explainMaybe
+  , mapLeft
+  , trace
   , myTrace
   , module Control.Monad.IO.Class
-  , module Control.Monad.Trans.Maybe
+  , module Control.Monad.Trans.Except
   , ByteString
   , chr
   , foldl'
@@ -68,6 +72,7 @@ module Utils
 import           Debug.Trace                 (trace)
 import           Control.Monad               (zipWithM)
 import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Crypto.Hash                 (hashWith, SHA1 (..), SHA256 (..), RIPEMD160 (..))
 import qualified Data.Binary                 as Bin
@@ -79,7 +84,7 @@ import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy.Base16 as B16
 import qualified Data.ByteString.Lazy        as LBS
 import qualified Data.Char                   as Char
-import           Data.Char                   (chr)
+import           Data.Char                   (chr, ord)
 import           Data.List                   (foldl')
 import           Data.Function               ((&))
 import           Data.Functor                (void)
@@ -117,20 +122,26 @@ base58Chars =
   -- }}}
 
 
-getIndexOfBase58Char :: Word8 -> Maybe Integer
+getIndexOfBase58Char :: Word8 -> Either Text Integer
 getIndexOfBase58Char target =
   -- {{{
   let
-    go _          []                = Nothing
-    go Nothing    _                 = Nothing
-    go (Just acc) (currByte : rest) =
+    go _          []                = Left "byte out of bounds for base58."
+    go (Left err)    _              = Left err
+    go (Right acc) (currByte : rest) =
       if currByte == target then
-        Just acc
+        Right acc
       else
-        go (Just $ acc + 1) rest
+        go (Right $ acc + 1) rest
   in
-  go (Just 0) base58Chars
+  go (Right 0) base58Chars
   -- }}}
+
+
+-- | Converts a `String` to a Base58 lazy `ByteString`.
+base58StringToBS :: String -> Either Text ByteString
+base58StringToBS str =
+  LBS.pack <$> traverse ((fromIntegral <$>) . getIndexOfBase58Char . fromIntegral . ord) str
 
 
 -- | Encodes a `ByteString` into Base58. Preserves @0@ padding.
@@ -148,7 +159,7 @@ encodeBase58 bs =
 
 -- | Decoding from a Base58 encoded `ByteString`. Fails if
 --   bytes bigger than @0x39@ (@57@) are encountered.
-decodeBase58 :: ByteString -> Maybe ByteString
+decodeBase58 :: ByteString -> Either Text ByteString
 decodeBase58 bs = do
   -- {{{
   num <- base58ToInteger bs
@@ -158,29 +169,32 @@ decodeBase58 bs = do
 
 -- | Converts a `ByteString` into an integer. Fails if
 --   bytes bigger than @0x39@ (@57@) are encountered.
-base58ToInteger :: ByteString -> Maybe Integer
+base58ToInteger :: ByteString -> Either Text Integer
 base58ToInteger bs =
   -- {{{
   let
-    foldFn _        Nothing             = Nothing
-    foldFn currByte (Just (count, acc)) =
-      Just
-        ( count + 1
-        , fromIntegral currByte * 58 ^ count + acc
-        )
+    foldFn _        err@(Left _)         = err
+    foldFn currByte (Right (count, acc)) =
+      if currByte > 0x39 then
+        Left "bad base58."
+      else
+        Right
+          ( count + 1
+          , fromIntegral currByte * 58 ^ count + acc
+          )
   in
-  snd <$> LBS.foldr foldFn (Just (0, 0)) bs
+  snd <$> LBS.foldr foldFn (Right (0, 0)) bs
   -- }}}
 
 
 -- | Pretty prints an integral number with Base58 encoding
 --   (utilizes `showIntAtBase` function from %{Numeric}).
-showIntegralInBase58 :: (Integral a, Show a) => a -> Maybe String
+showIntegralInBase58 :: (Integral a, Show a) => a -> Either Text String
 showIntegralInBase58 x
   -- {{{
-  | x < 0     = Nothing
+  | x < 0     = Left "can't show a negative number in base58."
   | otherwise =
-      Just $ showIntAtBase
+      Right $ showIntAtBase
         58
         (\ind -> chr $ fromIntegral (base58Chars !! ind))
         x
@@ -226,7 +240,7 @@ toBase58WithChecksum bs =
 
 -- | After decoding the input, checks the embedded checksum
 --   and in case of success, returns the original `ByteString`.
-decodeBase58WithChecksum :: ByteString -> Maybe ByteString
+decodeBase58WithChecksum :: ByteString -> Either Text ByteString
 decodeBase58WithChecksum bs = do
   -- {{{
   decoded <- decodeBase58 bs
@@ -235,15 +249,16 @@ decodeBase58WithChecksum bs = do
   if fromHash == LBS.take 4 hashOfMain then
     return mainBytes
   else
-    fail "bad format."
+    Left "bad format."
   -- }}}
 
 
 -- | Pretty prints a Base58 encode `ByteString`.
-showBase58EncodedBS :: ByteString -> Maybe String
+showBase58EncodedBS :: ByteString -> Either Text String
 showBase58EncodedBS bs =
     LBS.unpack bs
   & traverse ((chr . fromIntegral <$>) . (base58Chars !?) . fromIntegral)
+  & explainMaybe "given bytestring does not have a valid base58 encoding."
 
 
 -- From the original "haskoin" project.
@@ -511,14 +526,10 @@ integralTo32BytesLE =
 
 -- | Attempts to convert a string that consists of @[0..9]@, @[a..f]@,
 --   or @[A..F]@ to a lazy `ByteString`.
-base16StringToBS :: String -> Maybe ByteString
+base16StringToBS :: String -> Either Text ByteString
 base16StringToBS b16 =
   -- {{{
-  case B16.decodeBase16 (fromString b16) of
-    Right bs ->
-      Just bs
-    _ ->
-      Nothing
+  B16.decodeBase16 (fromString b16)
   -- }}}
 
 
@@ -630,6 +641,18 @@ hoistMaybe = MaybeT . pure
 fromTwoEitherValues :: Either p x -> Either q y -> Maybe (x, y)
 fromTwoEitherValues (Right x) (Right y) = Just (x, y)
 fromTwoEitherValues _         _         = Nothing
+
+
+-- | Converts a `Maybe` value into `Either` to help clarify the
+--   cause of failure.
+explainMaybe :: Text -> Maybe a -> Either Text a
+explainMaybe explanation Nothing = Left explanation
+explainMaybe _          (Just x) = Right x
+
+
+mapLeft :: (e -> e') -> Either e a -> Either e' a
+mapLeft _ (Right x)  = Right x
+mapLeft f (Left err) = Left $ f err
 
 
 -- | My own version of the `trace` function that shows the

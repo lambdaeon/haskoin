@@ -2,12 +2,14 @@
 {-# LANGUAGE KindSignatures       #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE OverloadedStrings    #-}
+{-# LANGUAGE RecordWildCards      #-}
 
 
 module ECC
-  ( n
-  , p
-  , generator
+  ( toSEC
+  , secParser
+  , address
+  , addressToHash160OfSEC
   , pubKeyOf
   , wifOf
   , verify
@@ -15,6 +17,7 @@ module ECC
   , PubKey
   , SecKey
   , SigHash
+  , Signature (..)
   , Nonce
   , testnetPublicKey
   , testnetPrivateKey
@@ -26,11 +29,15 @@ module ECC
 
 
 import qualified Data.ByteString.Lazy     as LBS
+import           Data.Char                (ord)
+import           Data.Serializable
+import           Extension.ByteString.Parser
 import qualified FieldElement             as FE
 import qualified FiniteFieldEllipticCurve as FFEC
-import           Utils
 import           SECP256K1
 import           TestnetWalletPassPhrase (sourceForSecretKey, sourceForSecretKeyOfChangeAddress)
+import qualified Text.Megaparsec          as P
+import           Utils
 
 
 -- DATATYPES
@@ -123,7 +130,7 @@ toSEC :: Bool -> PubKey -> ByteString
 toSEC compressed point =
   -- {{{
   case (FFEC.getX point, FFEC.getY point) of
-    (Just x_, Just y_) ->
+    (Right x_, Right y_) ->
       let
         x = toInteger x_
         y = toInteger y_
@@ -153,9 +160,9 @@ secParser = do
       fromXY x' y' =
         -- {{{
         case FFEC.fromCoords x' y' of
-          Just point ->
+          Right point ->
             return point
-          Nothing ->
+          Left _ ->
             fail "invalid point"
         -- }}}
   if fstByte == 0x02 then do
@@ -198,7 +205,7 @@ address compressed testnet point =
 
 -- | Decodes a Bitcoin address to the HASH160 of its
 --   SEC formatted public key point.
-addressToHash160OfSEC :: ByteString -> Maybe ByteString
+addressToHash160OfSEC :: ByteString -> Either Text ByteString
 addressToHash160OfSEC addr58 = do
   -- {{{
   decoded <- decodeBase58WithChecksum addr58
@@ -239,15 +246,15 @@ verify pubPoint z_ Signature {r = r_, s = s} =
     uGvP = uG <> vP
   in
   case FFEC.getX uGvP of
-    Just r' ->
+    Right r' ->
       r == toInteger r'
-    Nothing ->
+    Left _ ->
       False
   -- }}}
 
 
 -- | Siging a `SigHash` with a `SecKey` and a `Nonce`.
-signWith :: SecKey -> Nonce -> SigHash -> Maybe Signature
+signWith :: SecKey -> Nonce -> SigHash -> Either Text Signature
 signWith e_ k_ z_ = do
   -- {{{
   let e = toInteger e_

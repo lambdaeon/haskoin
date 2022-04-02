@@ -22,7 +22,7 @@ module Tx
 -- IMPORTS
 -- {{{
 import           Debug.Trace                 (trace)
-import           Control.Monad               (replicateM, forM)
+import           Control.Monad               (replicateM, forM, when)
 import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy        as LBS
 import qualified Data.ByteString             as BS
@@ -77,12 +77,11 @@ instance Serializable Tx where
   parser = do
     -- {{{
     txVersion  <- word32ParserLE "version"
-    if txVersion /= 1 then
-      void $ P.takeP
-        (Just "found the need for this discard of 2 bytes by trial and error")
-        2
-    else
-      return ()
+    when (txVersion /= 1)
+      $ void
+      $ P.takeP
+          (Just "found the need for this discard of 2 bytes by trial and error")
+          2
     numTxIns   <- Varint.countParser
     txTxIns    <- replicateM numTxIns  parser
     numTxOuts  <- Varint.countParser
@@ -107,30 +106,29 @@ serializeWithCustomTxIns bs Tx {..} =
 
 
 -- | Fee computation of a transaction (total in, minus total out).
-fee :: Tx -> MaybeT IO Word
+fee :: Tx -> ExceptT Text IO Word
 fee Tx {..} = do
   -- {{{
   let totOut = foldr (\txOut acc -> txOutAmount txOut + acc) 0 txTxOuts
-  words <- forM txTxIns (\txIn -> getTxInAmount txTestnet txIn)
-  return $ (sum words) - totOut
+  words <- forM txTxIns (getTxInAmount txTestnet)
+  return $ sum words - totOut
   -- }}}
 
 
 -- | Verification of a transaction by making sure the fee is
 --   greater than or equal to 0, and that all `TxIn` value is
 --   also valid.
-verify :: Tx -> IO Bool
+verify :: Tx -> ExceptT Text IO ()
 verify tx@Tx {..} = do
   -- {{{
-  mFee <- runMaybeT $ fee tx
-  case mFee of
-    Just fee' -> do
-      let ioValids :: IO [Bool]
-          ioValids = mapM (verifyTxIn tx) txTxIns
-      validTxIns <- and <$> ioValids
-      return (fee' >= 0 && validTxIns)
-    Nothing ->
-      return False
+  fee' <- fee tx
+  let ioValids :: ExceptT Text IO ()
+      ioValids = mapM_ (verifyTxIn tx) txTxIns
+  validTxIns <- ioValids
+  if fee' >= 0 then
+    return ()
+  else
+    fail "negative fee."
   -- }}}
 
 
@@ -152,7 +150,7 @@ verify tx@Tx {..} = do
 sigHashForTxIn :: Tx
                -> TxIn
                -> Maybe TxOut -- ^ Meant as a caching mechanism to prevent multiple queries to the block explorer (may be removed).
-               -> MaybeT IO SigHash
+               -> ExceptT Text IO SigHash
 sigHashForTxIn tx@Tx {..} txIn mTxOutCache = do
   -- {{{
   txInsBSs <- mapM
@@ -183,27 +181,21 @@ sigHashForTxIn tx@Tx {..} txIn mTxOutCache = do
 --     (1) Finds the `SigHash` of the `TxIn` in question.
 --     2.  Uses this `SigHash` to verify the stack of its
 --         `ScriptSig` atop its corresponding `ScriptPubKey`.
-verifyTxIn :: Tx -> TxIn -> IO Bool
+verifyTxIn :: Tx -> TxIn -> ExceptT Text IO ()
 verifyTxIn tx@Tx {..} txIn = do
   -- {{{
-  mRes <- runMaybeT $ do
-            txOut <- getTxInsTxOut txTestnet txIn
-            sigHash <- sigHashForTxIn tx txIn (Just txOut)
-            return $ Script.validate
-              (txInScriptSig     txIn )
-              (txOutScriptPubKey txOut)
-              sigHash
-  case mRes of
-    Just res ->
-      return res
-    _ ->
-      return False
+  txOut   <- getTxInsTxOut txTestnet txIn
+  sigHash <- sigHashForTxIn tx txIn (Just txOut)
+  except $ Script.validate
+    (txInScriptSig     txIn )
+    (txOutScriptPubKey txOut)
+    sigHash
   -- }}}
 
 
 -- | Fetches a transaction from its ID from a block explorer
---   (<https://blockstream.info>).
-fetch :: Bool -> ByteString -> MaybeT IO Tx
+--   (<https://blockstream.info>). Reverses the given ID for query.
+fetch :: Bool -> ByteString -> ExceptT Text IO Tx
 fetch testnet txId =
   -- {{{
   let
@@ -211,27 +203,28 @@ fetch testnet txId =
       | testnet   = "https://blockstream.info/testnet/api/"
       | otherwise = "https://blockstream.info/api/"
     url :: Request
-    url =   baseEndPoint <> "tx/" <> encodeHex (LBS.reverse txId) <> "/hex"
+    url =   baseEndPoint <> "tx/" <> encodeHex txId <> "/hex"
           & LBS.unpack
           & map (chr . fromIntegral)
           & fromString
+    refineTx tx = tx
+      { txTestnet = testnet
+      , txTxIns   = map TxIn.reversePrevId (txTxIns tx)
+      }
   in do
   response <- liftIO $ httpLbs url
   resBS    <-   getResponseBody response
               & decodeHex
-              & eitherToMaybe
-              & return
-              & MaybeT
-  MaybeT                                   $
-    return                                 $
-    fmap (\tx -> tx {txTestnet = testnet}) $
-    eitherToMaybe                          $
-    P.runParser parser "" resBS
+              & except
+  P.runParser parser "" resBS
+    & fmap refineTx
+    & except
+    & withExceptT (const "failed to parse fetched tx.")
   -- }}}
 
 
 -- | Fetches the `TxOut` which a `TxIn` points to.
-getTxInsTxOut :: Bool -> TxIn -> MaybeT IO TxOut
+getTxInsTxOut :: Bool -> TxIn -> ExceptT Text IO TxOut
 getTxInsTxOut testnet TxIn {..} = do
   -- {{{
   tx <- fetch testnet txInPrevTx
@@ -246,7 +239,7 @@ getTxInsTxOut testnet TxIn {..} = do
 
 
 -- | Fetches the amount of satoshis available in a specific `TxIn`.
-getTxInAmount :: Bool -> TxIn -> MaybeT IO Word
+getTxInAmount :: Bool -> TxIn -> ExceptT Text IO Word
 getTxInAmount testnet txIn = do
   -- {{{
   txOut <- getTxInsTxOut testnet txIn

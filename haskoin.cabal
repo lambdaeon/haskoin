@@ -26,6 +26,7 @@ library
   exposed-modules:
       Data.Serializable
       Data.Varint
+      ECC
       Extension.ByteString
       Extension.ByteString.Lazy
       Extension.ByteString.Parser
@@ -35,10 +36,6 @@ library
       Script
       Script.PayToPubKeyHash
       SECP256K1
-      SECP256K1.Constants
-      SECP256K1.S256Field
-      SECP256K1.S256Point
-      SECP256K1.Signature
       TestnetWalletPassPhrase
       Tx
       TxIn
