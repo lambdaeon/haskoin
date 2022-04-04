@@ -169,7 +169,9 @@ sigHashForTxIn tx@Tx {..} txIn mTxOutCache = do
                       return $ TxIn.serializeWithoutScriptSig txIn
                 )
                 txTxIns
-  let txInsBS = LBS.concat txInsBSs
+  let txInCount  :: Varint
+      txInCount  = Varint $ fromIntegral $ length txTxIns
+      txInsBS    = serialize txInCount <> LBS.concat txInsBSs
       beforeHash =
            serializeWithCustomTxIns txInsBS tx
         <> integralToNBytesLE 4 1 -- SIGHASH_ALL at the end.

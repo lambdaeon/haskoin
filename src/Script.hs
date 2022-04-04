@@ -487,6 +487,7 @@ updateStack (Script script) z stack@(Stack main alt) =
     appendAlt  bs  rest = updateStack (Script rest) z $ Stack main (bs : alt)
     appendNum  x        = appendMain (encodeNum x)
     genericFail         = Left "invalid script."
+    fewElemsFail opLbl  = Left $ "not enough elements in stack for " <> opLbl <> "."
     opOnHead    op rest =
       -- {{{
       case main of
@@ -529,7 +530,7 @@ updateStack (Script script) z stack@(Stack main alt) =
       updateStack (Script $ OpCommand fstCmd : OpCommand OP_VERIFY : rest) z stack
       -- }}}
   in
-  case seq (myTrace "\n\n\nTHE STACK: " stack) (myTrace "\nTHE SCRIPT CMDs: " script) of
+  case script of
     []                                      ->
       case main of
         [] ->
@@ -800,12 +801,12 @@ updateStack (Script script) z stack@(Stack main alt) =
       -- {{{
       case main of
         []            ->
-          genericFail
+          Left "nothing left to OP_VERIFY."
         headBS : restOfMain ->
           if bsIsFalse headBS then
-            genericFail
+            Left "OP_VERIFY failed."
           else
-            myTrace "\n\n%%%%%%%%%%%%%%%%%%%%\nRESULT AFTER VERIFY: " $ updateStack (Script cmds) z (Stack restOfMain alt)
+            updateStack (Script cmds) z (Stack restOfMain alt)
       -- }}}
     OpCommand OP_RETURN              : cmds ->
       Left "op_return, or invalid command."
@@ -831,7 +832,7 @@ updateStack (Script script) z stack@(Stack main alt) =
         _ : _ : restOfMain ->
           updateStack (Script cmds) z (Stack restOfMain alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_2DROP"
       -- }}}
     OpCommand OP_2DUP                : cmds ->
       -- {{{
@@ -842,7 +843,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack (head2 : head1 : main) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_2DUP"
       -- }}}
     OpCommand OP_3DUP                : cmds ->
       -- {{{
@@ -853,7 +854,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack (head3 : head2 : head1 : main) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_3DUP"
       -- }}}
     OpCommand OP_2OVER               : cmds ->
       -- {{{
@@ -864,7 +865,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack (head2 : head1 : main) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_2OVER"
       -- }}}
     OpCommand OP_2ROT                : cmds ->
       -- {{{
@@ -875,7 +876,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack (head2 : head1 : head6 : head5 : head4 : head3 : restOfMain) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_2ROT"
       -- }}}
     OpCommand OP_2SWAP               : cmds ->
       -- {{{
@@ -886,7 +887,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack (head2 : head1 : head4 : head3 : restOfMain) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_2SWAP"
       -- }}}
     OpCommand OP_IFDUP               : cmds ->
       -- {{{
@@ -905,7 +906,7 @@ updateStack (Script script) z stack@(Stack main alt) =
               z
               (Stack (head1 : main) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_IFDUP"
       -- }}}
     OpCommand OP_DEPTH               : cmds ->
       -- {{{
@@ -920,7 +921,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack restOfMain alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_DROP"
       -- }}}
     OpCommand OP_DUP                 : cmds ->
       -- {{{
@@ -928,7 +929,7 @@ updateStack (Script script) z stack@(Stack main alt) =
         head1 : _ ->
           appendMain head1 cmds
         _ ->
-          genericFail
+          fewElemsFail "OP_DUP"
       -- }}}
     OpCommand OP_NIP                 : cmds ->
       -- {{{
@@ -939,7 +940,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack (head2 : restOfMain) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_NIP"
       -- }}}
     OpCommand OP_OVER                : cmds ->
       -- {{{
@@ -947,7 +948,7 @@ updateStack (Script script) z stack@(Stack main alt) =
         _ : head1 : _ ->
           appendMain head1 cmds
         _ ->
-          genericFail
+          fewElemsFail "OP_OVER"
       -- }}}
     OpCommand OP_PICK                : cmds ->
       -- {{{
@@ -957,11 +958,11 @@ updateStack (Script script) z stack@(Stack main alt) =
             n = bsToSignedIntegralLE head1
           in
           if length restOfMain < n + 1 then
-            genericFail
+            Left "OP_PICK failed - bad index."
           else
             appendMain (restOfMain !! n) cmds
         _ ->
-          genericFail
+          fewElemsFail "OP_PICK"
       -- }}}
     OpCommand OP_ROLL                : cmds ->
       -- {{{
@@ -973,7 +974,7 @@ updateStack (Script script) z stack@(Stack main alt) =
           if n == 0 then
             noOp cmds
           else if length restOfMain < n + 1 || n < 0 then
-            genericFail
+            Left "OP_ROLL failed - bad index."
           else
             let
               -- length firstN == n
@@ -984,7 +985,7 @@ updateStack (Script script) z stack@(Stack main alt) =
               z
               (Stack (take (n - 1) firstN ++ restOfMain') alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_ROLL"
       -- }}}
     OpCommand OP_ROT                 : cmds ->
       -- {{{
@@ -995,7 +996,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack (head1 : head3 : head2 : restOfMain) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_ROT"
       -- }}}
     OpCommand OP_SWAP                : cmds ->
       -- {{{
@@ -1006,7 +1007,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack (head1 : head2 : restOfMain) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_SWAP"
       -- }}}
     OpCommand OP_TUCK                : cmds ->
       -- {{{
@@ -1017,7 +1018,7 @@ updateStack (Script script) z stack@(Stack main alt) =
             z
             (Stack (head2 : head1 : head2 : restOfMain) alt)
         _ ->
-          genericFail
+          fewElemsFail "OP_TUCK"
       -- }}}
     OpCommand OP_SIZE                : cmds ->
       -- {{{
@@ -1025,7 +1026,7 @@ updateStack (Script script) z stack@(Stack main alt) =
         head1 : _ ->
           appendNum (LBS.length head1) cmds
         _ ->
-          genericFail
+          fewElemsFail "OP_SIZE"
       -- }}}
     OpCommand OP_EQUAL               : cmds ->
       -- {{{
@@ -1175,7 +1176,7 @@ updateStack (Script script) z stack@(Stack main alt) =
           else
             appendResult 0
         _ ->
-          genericFail
+          fewElemsFail "OP_WITHIN"
       -- }}}
     OpCommand OP_RIPEMD160           : cmds ->
       -- {{{
@@ -1204,7 +1205,7 @@ updateStack (Script script) z stack@(Stack main alt) =
       case main of
         secBS : initDER : restOfMain -> do
           -- {{{
-          derBS     <- explainMaybe "invalid DER." $ LBS.safeInit initDER
+          derBS     <- explainMaybe "invalid der." $ LBS.safeInit initDER
           pubKey    <-   P.runParser ECC.secParser "" secBS
                        & mapLeft (const "failed to parse sec formatted public key.")
           signature <-   P.runParser parser "" derBS 
@@ -1223,7 +1224,7 @@ updateStack (Script script) z stack@(Stack main alt) =
           -- }}}
         _                                     ->
           -- {{{
-          genericFail
+          fewElemsFail "OP_CHECKSIG"
           -- }}}
       -- }}}
     OpCommand OP_CHECKSIGVERIFY      : cmds ->

@@ -75,16 +75,20 @@ testnetPayTo prevTx prevIndex targetAmount toAddr = do
     nonce   <-   liftIO
                $ fromInteger . bsToInteger . LBS.fromStrict <$> getRandomBytes 8
     sigHash <- Tx.sigHashForTxIn initTx txIn (Just txInsTxOut)
-    der     <-   except
-               $ serialize <$> signWith ECC.testnetPrivateKey nonce sigHash
-    let sig       = der `LBS.snoc` 0x01
+    signature <- except $ signWith ECC.testnetPrivateKey nonce sigHash
+    let der = serialize signature
+        sig       = der `LBS.snoc` 0x01
         sec       = ECC.toSEC True ECC.testnetPublicKey
         scriptSig = Script [Script.Element sig, Script.Element sec]
         fnlTxIn   = txIn {txInScriptSig = scriptSig}
-    liftIO $ putStrLn "\n\n************************************"
-    liftIO $ print $ encodeHex $ serialize fnlTxIn
-    liftIO $ putStrLn "************************************\n\n"
-    return $ initTx {txTxIns = [myTrace "\nTHE FINAL TXIN: " fnlTxIn]}
+        fnlTx     = initTx {txTxIns = [fnlTxIn]}
+    return $ initTx {txTxIns = [fnlTxIn]}
   -- }}}
+
+
+
+
+
+
 
 

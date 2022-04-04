@@ -4,6 +4,7 @@ module Extension.ByteString.Lazy
   , chunksOf
   , safeLast
   , safeInit
+  , dropEnd
   ) where
 
 
@@ -80,6 +81,40 @@ safeInit bs =
   else
     Just $ LBS.init bs
   -- }}}
+
+
+
+dropEnd :: Int -> ByteString -> Maybe ByteString
+dropEnd i' bs =
+  let
+    i   = fromIntegral i'
+    len = LBS.length bs
+  in
+  if i > LBS.length bs then
+    Nothing
+  else
+    Just $ LBS.take (len - i) bs
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

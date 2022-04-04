@@ -33,6 +33,8 @@ import           Utils
 main :: IO ()
 main = do
   eitherFaucetAddress <- return $ base58StringToBS "mkHS9ne12qx9pS9VojpwU5xtRd4T7X7ZUt"
+  booksTargetAddress  <- return $ base58StringToBS "miKegze5FQNCnGw6PKyqUbYUeBa4x2hFeM"
+  booksChangeAddress  <- return $ base58StringToBS "mzx5YhAH9kNHtcN481u6WkjeHjYtVeKVh2"
   let faucetAddress =
         case eitherFaucetAddress of
           Right addr -> addr

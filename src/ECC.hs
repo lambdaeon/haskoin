@@ -28,15 +28,16 @@ module ECC
   ) where
 
 
-import qualified Data.ByteString.Lazy     as LBS
-import           Data.Char                (ord)
+import qualified Data.ByteString.Lazy        as LBS
+import           Data.Char                   (ord)
 import           Data.Serializable
+import qualified Extension.ByteString.Lazy   as LBS
 import           Extension.ByteString.Parser
-import qualified FieldElement             as FE
-import qualified FiniteFieldEllipticCurve as FFEC
+import qualified FieldElement                as FE
+import qualified FiniteFieldEllipticCurve    as FFEC
 import           SECP256K1
-import           TestnetWalletPassPhrase (sourceForSecretKey, sourceForSecretKeyOfChangeAddress)
-import qualified Text.Megaparsec          as P
+import           TestnetWalletPassPhrase     (sourceForSecretKey, sourceForSecretKeyOfChangeAddress)
+import qualified Text.Megaparsec             as P
 import           Utils
 
 
@@ -168,13 +169,13 @@ secParser = do
   if fstByte == 0x02 then do
     -- {{{
     let initY = yFromX x
-        y = if even initY then initY else (-initY)
+        y = if even initY then (-initY) else initY
     fromXY x y
     -- }}}
   else if fstByte == 0x03 then do
     -- {{{
     let initY = yFromX x
-        y = if even initY then (-initY) else initY
+        y = if even initY then initY else (-initY)
     fromXY x y
     -- }}}
   else if fstByte == 0x04 then do
