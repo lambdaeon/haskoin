@@ -76,7 +76,7 @@ instance Serializable TxIn where
 serializeWithCustomScriptSig :: ByteString -> TxIn -> ByteString
 serializeWithCustomScriptSig customSS TxIn {..} =
   -- {{{
-     txInPrevTx
+     LBS.reverse txInPrevTx
   <> integralToNBytesLE 4 txInPrevIndex
   <> customSS
   <> integralToNBytesLE 4 txInSequence
