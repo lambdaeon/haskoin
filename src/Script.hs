@@ -529,6 +529,8 @@ updateStack (Script script) z stack@(Stack main alt) =
       -- {{{
       updateStack (Script $ OpCommand fstCmd : OpCommand OP_VERIFY : rest) z stack
       -- }}}
+    zMsg :: ECC.SigHash
+    zMsg = fromInteger $ bsToInteger z
   in
   case script of
     []                                      ->
@@ -1205,14 +1207,9 @@ updateStack (Script script) z stack@(Stack main alt) =
       case main of
         secBS : initDER : restOfMain -> do
           -- {{{
-          derBS     <- explainMaybe "invalid der." $ LBS.safeInit initDER
-          pubKey    <-   P.runParser ECC.secParser "" secBS
-                       & mapLeft (const "failed to parse sec formatted public key.")
-          signature <-   P.runParser parser "" derBS 
-                       & mapLeft (const "failed to parse der formatted signature.")
-          let zMsg :: ECC.SigHash
-              zMsg = fromInteger $ bsToInteger z
-              appendResult oneOrZero =
+          pubKey    <- parseToPubKey secBS
+          signature <- signatureFromSIGHASHALLDER initDER
+          let appendResult oneOrZero =
                 updateStack
                   (Script cmds)
                   z
@@ -1232,7 +1229,97 @@ updateStack (Script script) z stack@(Stack main alt) =
       performAndVerify OP_CHECKSIG cmds
       -- }}}
     OpCommand OP_CHECKMULTISIG       : cmds ->
-      undefined -- TODO
+      -- {{{
+      case main of
+        nBS : rest01 ->
+          -- {{{
+          let
+            n = decodeNum nBS
+          in
+          if length rest01 < n then
+            -- {{{
+            Left "not enough public keys in stack for OP_CHECKMULTISIG."
+            -- }}}
+          else
+            -- {{{
+            let
+              (secBSs, rest02) = splitAt n rest01
+            in
+            case rest02 of
+              mBS : rest03 ->
+                -- {{{
+                let
+                  m = decodeNum mBS
+                in
+                if length rest03 < m then
+                  -- {{{
+                  Left "not enough signatures in stack for OP_CHECKMULTISIG."
+                  -- }}}
+                else if m > n then
+                  -- {{{
+                  Left "too many signatures."
+                  -- }}}
+                else
+                  -- {{{
+                  let
+                    (initDERs, rest04) = splitAt m rest03
+                  in
+                  case rest04 of
+                    bs : rest05 | bs == LBS.singleton 0x00 -> do
+                      -- {{{
+                      pubKeys    <- mapM parseToPubKey secBSs
+                      signatures <- mapM signatureFromSIGHASHALLDER initDERs
+                      let go []           _       = Right ()
+                          go _            []      = Left "leftover signature(s)."
+                          go (sig : sigs) remPubs =
+                            -- {{{
+                            let
+                              innerGo _            []       = Nothing
+                              innerGo pubsToReturn (p : ps) =
+                                -- {{{
+                                if ECC.verify p zMsg sig then
+                                  Just $ pubsToReturn ++ ps
+                                else
+                                  innerGo (p : pubsToReturn) ps
+                                -- }}}
+                              mNewPubs = innerGo [] remPubs
+                            in
+                            case mNewPubs of
+                              Just newPubs ->
+                                go sigs newPubs
+                              Nothing      ->
+                                Left "invalid signature."
+                            -- }}}
+                          appendResult oneOrZero =
+                            -- {{{
+                            updateStack
+                              (Script cmds)
+                              z
+                              (Stack (oneOrZero : rest05) alt)
+                            -- }}}
+                      case go signatures pubKeys of
+                        Right _ ->
+                          appendResult $ LBS.singleton 1
+                        Left  _ ->
+                          appendResult $ LBS.singleton 0
+                      -- }}}
+                    _ ->
+                      -- {{{
+                      Left "OP_CHECKMULTISIG couldn't find a OP_0 after the signatures."
+                      -- }}}
+                  -- }}}
+                -- }}}
+              _ ->
+                -- {{{
+                fewElemsFail "OP_CHECKMULTISIG (no \"m\" found)"
+                -- }}}
+            -- }}}
+          -- }}}
+        _ ->
+          -- {{{
+          fewElemsFail "OP_CHECKMULTISIG"
+          -- }}}
+      -- }}}
     OpCommand OP_CHECKMULTISIGVERIFY : cmds ->
       -- {{{
       performAndVerify OP_CHECKMULTISIG cmds
@@ -1289,6 +1376,25 @@ bsBooleanToggle bs =
     LBS.singleton 1
   else
     LBS.singleton 0
+  -- }}}
+
+
+-- | Utility function for parsing an SEC formatted `ByteString` into a `PubKey`.
+parseToPubKey :: ByteString -> Either Text ECC.PubKey
+parseToPubKey secBS =
+  -- {{{
+    P.runParser ECC.secParser "" secBS
+  & mapLeft (const "failed to parse sec formatted public key.")
+  -- }}}
+
+
+-- | Parses a DER formatted signature with @SIGHASH_ALL@ as its last byte.
+signatureFromSIGHASHALLDER :: ByteString -> Either Text ECC.Signature
+signatureFromSIGHASHALLDER initDER = do
+  -- {{{
+  derBS     <- explainMaybe "invalid der." $ LBS.safeInit initDER
+  P.runParser parser "" derBS 
+    & mapLeft (const "failed to parse der formatted signature.")
   -- }}}
 -- }}}
 

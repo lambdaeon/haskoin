@@ -47,7 +47,7 @@ fromAddress addr58 = do
 testnetPayTo :: ByteString -> Word32 -> Word -> ByteString -> ExceptT Text IO Tx
 testnetPayTo prevTx prevIndex targetAmount toAddr = do
   -- {{{
-  let fixedFee = 100
+  let fixedFee = 150
       txIn     = TxIn.initWithEmptyScriptSig prevTx prevIndex
   txInsTxOut <- Tx.getTxInsTxOut True txIn
   let changeAmount = txOutAmount txInsTxOut - targetAmount - fixedFee
@@ -76,7 +76,7 @@ testnetPayTo prevTx prevIndex targetAmount toAddr = do
                $ fromInteger . bsToInteger . LBS.fromStrict <$> getRandomBytes 8
     sigHash <- Tx.sigHashForTxIn initTx txIn (Just txInsTxOut)
     signature <- except $ signWith ECC.testnetPrivateKey nonce sigHash
-    let der = serialize signature
+    let der       = serialize signature
         sig       = der `LBS.snoc` 0x01
         sec       = ECC.toSEC True ECC.testnetPublicKey
         scriptSig = Script [Script.Element sig, Script.Element sec]

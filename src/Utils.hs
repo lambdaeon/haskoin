@@ -42,6 +42,7 @@ module Utils
   , hash256
   , indexedMap
   , indexedMapM
+  , foldM
   , eitherToMaybe
   , (!?)
   , hoistMaybe
@@ -72,7 +73,7 @@ module Utils
 -- IMPORTS
 -- {{{
 import           Debug.Trace                 (trace)
-import           Control.Monad               (zipWithM)
+import           Control.Monad               (zipWithM, foldM)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
