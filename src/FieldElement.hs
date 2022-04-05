@@ -1,8 +1,3 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE KindSignatures      #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
-
 module FieldElement
   ( FieldElement
   , minShow

@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecordWildCards   #-}
-
-
 module TxIn
   ( TxIn (..)
   , serializeWithCustomScriptSig

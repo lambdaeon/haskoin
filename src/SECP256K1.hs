@@ -1,9 +1,3 @@
-{-# LANGUAGE DataKinds            #-}
-{-# LANGUAGE KindSignatures       #-}
-{-# LANGUAGE ScopedTypeVariables  #-}
-{-# LANGUAGE OverloadedStrings    #-}
-
-
 module SECP256K1 where
 
 

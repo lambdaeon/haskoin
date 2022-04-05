@@ -1,6 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
-
 -- MODULE
 -- {{{
 module Utils

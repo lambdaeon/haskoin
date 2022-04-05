@@ -45,6 +45,15 @@ library
       Paths_haskoin
   hs-source-dirs:
       src
+  default-extensions:
+      OverloadedStrings
+      RecordWildCards
+      DataKinds
+      KindSignatures
+      ScopedTypeVariables
+      TupleSections
+      NumericUnderscores
+      FlexibleInstances
   build-depends:
       base >=4.7 && <5
     , base16
@@ -71,6 +80,15 @@ executable haskoin-exe
       Paths_haskoin
   hs-source-dirs:
       app
+  default-extensions:
+      OverloadedStrings
+      RecordWildCards
+      DataKinds
+      KindSignatures
+      ScopedTypeVariables
+      TupleSections
+      NumericUnderscores
+      FlexibleInstances
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
@@ -101,6 +119,15 @@ test-suite haskoin-test
       Paths_haskoin
   hs-source-dirs:
       test
+  default-extensions:
+      OverloadedStrings
+      RecordWildCards
+      DataKinds
+      KindSignatures
+      ScopedTypeVariables
+      TupleSections
+      NumericUnderscores
+      FlexibleInstances
   ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5

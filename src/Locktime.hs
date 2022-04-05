@@ -1,6 +1,3 @@
-{-# LANGUAGE NumericUnderscores #-}
-
-
 module Locktime
   ( Locktime
   , make

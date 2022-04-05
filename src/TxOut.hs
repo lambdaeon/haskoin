@@ -1,6 +1,3 @@
-{-# LANGUAGE RecordWildCards   #-}
-
-
 module TxOut
   ( TxOut (..)
   , sampleTxOut1
