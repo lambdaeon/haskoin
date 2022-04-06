@@ -141,6 +141,7 @@ getIndexOfBase58Char target =
 -- | Converts a `String` to a Base58 lazy `ByteString`.
 base58StringToBS :: String -> Either Text ByteString
 base58StringToBS str =
+  -- {{{
   LBS.pack <$>
     traverse
       (   (fromIntegral <$>)
@@ -150,6 +151,7 @@ base58StringToBS str =
       )
       str
   -- decodeBase58 initBS
+  -- }}}
 
 
 -- | Encodes a `ByteString` into Base58. Preserves @0@ padding.

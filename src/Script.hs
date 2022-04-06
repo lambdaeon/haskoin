@@ -1,12 +1,15 @@
 module Script
-  ( Script (..)
+  ( Scheme (..)
+  , Script (..)
   , ScriptSig
   , ScriptPubKey
+  , RedeemScript
   , Command (..)
   , Operation (..)
   , operationFromOpCode
   , operationToOpCode
   , validate
+  , getRedeemScript
   , sampleScript0
   , sampleScript1
   , sampleScript2
@@ -23,11 +26,19 @@ import qualified Data.Varint               as Varint
 import           ECC                       (SigHash)
 import qualified ECC
 import qualified Extension.ByteString.Lazy as LBS
+import           Extension.List            (safeLast)
 import qualified FieldElement              as FE
 import qualified Text.Megaparsec           as P
 import qualified Text.Megaparsec.Debug     as P
 import           SECP256K1
 import           Utils
+
+
+-- | Sum type to represent various standard scripts.
+--   Although this does not seem like an ideal approach.
+data Scheme
+  = P2PKH
+  | P2SH
 
 
 -- OPERATION
@@ -434,6 +445,11 @@ type ScriptSig    = Script
 type ScriptPubKey = Script
 
 
+-- | Type alias for readability (RedeemScript withing a `ScriptSig`
+--   for the pay-to-script-hash scheme).
+type RedeemScript = Script
+
+
 -- | Record type representing a stack which `Command` values are
 --   meant to affect.
 data Stack = Stack
@@ -527,6 +543,7 @@ updateStack (Script script) z stack@(Stack main alt) =
   in
   case script of
     []                                      ->
+      -- {{{
       case main of
         [] ->
           Left "no elements remained in stack."
@@ -535,6 +552,20 @@ updateStack (Script script) z stack@(Stack main alt) =
             Left "stack reduced to 0x00."
           else
             Right stack
+      -- }}}
+    -- Checking for the p2sh pattern:
+    Element redeemScriptBS
+      : OpCommand OP_HASH160
+      : Element scriptHashBS
+      : OpCommand OP_EQUAL
+      : cmds                                -> do
+      -- {{{
+      redeemScript <- validateAndParseRedeemScript scriptHashBS redeemScriptBS
+      updateStack
+        (redeemScript <> Script cmds)
+        z
+        stack
+      -- }}}
     Element elemBS                   : cmds ->
       appendMain elemBS cmds
     OpCommand OP_0                   : cmds ->
@@ -1262,6 +1293,16 @@ updateStack (Script script) z stack@(Stack main alt) =
                       -- {{{
                       pubKeys    <- mapM parseToPubKey secBSs
                       signatures <- mapM signatureFromSIGHASHALLDER initDERs
+                      --  In this nested recursive function, I have not put
+                      --  the ordering restriction. This succeeds as long as
+                      --  all the signatures find a valid public key pair – in
+                      --  any order.
+                      --  According to the book, if e.g. the first signature
+                      --  fails to pair with the first public key, that public
+                      --  key is discarded altogether. And this discarding 
+                      --  continues until a match is found, at which point the
+                      --  next signature traverses the remaining public keys,
+                      --  and so on.
                       let go []           _       = Right ()
                           go _            []      = Left "leftover signature(s)."
                           go (sig : sigs) remPubs =
@@ -1337,6 +1378,78 @@ updateStack (Script script) z stack@(Stack main alt) =
       noOp cmds
     OpCommand OP_NOP10               : cmds ->
       noOp cmds
+  -- }}}
+
+
+-- | Checks if the given `ScriptPubKey` complies with the p2pkh scheme.
+scriptPubKeyIsValidForP2PKH :: ScriptPubKey -> Bool
+scriptPubKeyIsValidForP2PKH (Script script) =
+  -- {{{
+  case script of
+    [   OpCommand OP_DUP
+      , OpCommand OP_HASH160
+      , Element hash
+      , OpCommand OP_EQUALVERIFY
+      , OpCommand OP_CHECKSIG
+      ] ->
+      LBS.length hash == 20
+    _   ->
+      False
+  -- }}}
+
+
+-- | Checks if the given `ScriptPubKey` complies with the p2sh scheme,
+--   and if so, returns the carried @HASH160@ of the `RedeemScript`.
+redeemScriptHashFromP2SHScriptPubKey :: ScriptPubKey -> Maybe ByteString
+redeemScriptHashFromP2SHScriptPubKey (Script script) =
+  -- {{{
+  case script of
+    [OpCommand OP_HASH160, Element h160, OpCommand OP_EQUAL]
+      | LBS.length h160 == 20 ->
+      Just h160
+    _ ->
+      Nothing
+  -- }}}
+
+
+-- | By comparing given `ScriptSig` and `ScriptPubKey` to the p2sh standard,
+--   this function validates, parses and returns the `RedeemScript` embedded
+--   inside the given `ScriptSig`.
+getRedeemScript :: ScriptSig -> ScriptPubKey -> Either Text RedeemScript
+getRedeemScript (Script (OpCommand OP_0 : scriptSig)) scriptPubKey =
+  -- {{{
+  case (safeLast scriptSig, redeemScriptHashFromP2SHScriptPubKey scriptPubKey) of
+    (Just (Element redeemScriptBS), Just h160) ->
+      validateAndParseRedeemScript h160 redeemScriptBS
+    (_                  , Just _   ) ->
+      Left "no redeemscript in scriptsig."
+    (Just _             , Nothing  ) ->
+      Left "invalid scriptpubkey for p2sh."
+    (Nothing            , Nothing  ) ->
+      Left "invalid p2sh."
+  -- }}}
+getRedeemScript _ _ = Left "invalid scriptsig for p2sh."
+
+
+-- | Helper function to validate a serialized @RedeemScript@ by the given
+--   @HASH160@ and, in case of equality, parse it into a `RedeemScript`.
+validateAndParseRedeemScript :: ByteString -> ByteString -> Either Text RedeemScript
+validateAndParseRedeemScript h160 redeemScriptBS =
+  -- {{{
+  if LBS.length h160 == 20 && hash160 redeemScriptBS == h160 then
+    -- {{{
+    let
+      rsBS =    serialize (Varint $ fromIntegral $ LBS.length redeemScriptBS)
+             <> redeemScriptBS
+    in
+    mapLeft
+      (const "redeemscript parse failed.")
+      (P.runParser parser "" rsBS)
+    -- }}}
+  else
+    -- {{{
+    Left "invalid redeemscript."
+    -- }}}
   -- }}}
 
 

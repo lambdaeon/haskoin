@@ -30,11 +30,13 @@ library
       Extension.ByteString
       Extension.ByteString.Lazy
       Extension.ByteString.Parser
+      Extension.List
       FieldElement
       FiniteFieldEllipticCurve
       Locktime
       Script
       Script.PayToPubKeyHash
+      Script.PayToScriptHash
       SECP256K1
       TestnetWalletPassPhrase
       Tx

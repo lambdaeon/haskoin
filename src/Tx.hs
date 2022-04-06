@@ -8,9 +8,10 @@ module Tx
   , getTxInsTxOut
   , getTxInAmount
   , sigHashForTxIn
-  , verify
-  , verifyTxIn
+  , verifyFor
+  , verifyTxInFor
   , sampleTxBS
+  , sampleP2SH
   ) where
 -- }}}
 
@@ -36,6 +37,7 @@ import qualified Extension.ByteString.Lazy   as LBS
 import           Locktime                    (Locktime)
 import qualified Locktime
 import           Network.HTTP.Simple         (httpLbs, getResponseBody, Request)
+import           Script                      (RedeemScript)
 import qualified Script
 import           ECC                         (SigHash)
 import qualified Text.Megaparsec             as P
@@ -46,7 +48,6 @@ import           TxOut                       (TxOut (..))
 import qualified TxOut
 import           Utils
 -- }}}
-
 
 
 
@@ -111,18 +112,15 @@ fee Tx {..} = do
   -- }}}
 
 
--- | Verification of a transaction by making sure the fee is
---   greater than or equal to 0, and that all `TxIn` value is
---   also valid.
-verify :: Tx -> ExceptT Text IO ()
-verify tx@Tx {..} = do
+-- | Verification of a transaction with respect to the given script scheme
+--   by making sure the fee is greater than or equal to 0, and that all
+--   `TxIn` values are also valid.
+verifyFor :: Script.Scheme -> Tx -> ExceptT Text IO ()
+verifyFor scheme tx@Tx {..} = do
   -- {{{
   fee' <- fee tx
-  let ioValids :: ExceptT Text IO ()
-      ioValids = mapM_ (verifyTxIn tx) txTxIns
-  validTxIns <- ioValids
   if fee' >= 0 then
-    return ()
+    mapM_ (verifyTxInFor scheme tx) txTxIns
   else
     fail "negative fee."
   -- }}}
@@ -132,35 +130,51 @@ verify tx@Tx {..} = do
 --   of the transaction for a specific `TxIn` of it.
 --     (1) Goes through all the `TxIn` values and serialize them with
 --         @0x00@ instead of their own `ScriptSig`.
---     2.  When it reaches the `TxIn` in question, looks up the block explorer
---         (if no `TxOut` is provided), takes the corresponding `TxOut`'s
---         `ScriptPubKey` and used its serialization to serialize the `TxIn`.
+--     2.  When it reaches the `TxIn` in question:
+--           * For p2pkh, looks up the block explorer (if no `TxOut` is
+--             provided), takes the corresponding `TxOut`'s `ScriptPubKey`
+--             and used its serialization to serialize the `TxIn`.
+--           * For p2sh, attempts to find the RedeemScript from its own
+--             `ScriptSig`, and put its serialization in place of the
+--             empty script.
 --     3.  Serializes the `Tx` with this customized serialization of the `TxIn`
 --         values.
 --     4.  Appends @SIGHASH_ALL@ with @0x01@ in 4 little-endian bytes to the
 --         custom serialization of the `Tx`.
 --     5.  Performs a `hash256` on the result.
---     6.  Converts this hashed bytestring to the `SigHash` value
---         (which is a `S256Order` value, which in turn is a `FieldElement`
---         with the prime of `n` from @SECP256K1@).
+--     6.  Converts this hashed bytestring to the `SigHash` value (which
+--         is a `S256Order` value, which in turn is a `FieldElement` with
+--         the prime of `n` from @SECP256K1@). This `Num` is interpreted
+--         from the `ByteString` as big-endian.
 sigHashForTxIn :: Tx
                -> TxIn
-               -> Maybe TxOut -- ^ Meant as a caching mechanism to prevent multiple queries to the block explorer (may be removed).
+               -> Either RedeemScript (Maybe TxOut) -- ^ Option to choose between p2sh and p2pkh. `TxOut` may be provided as a (possibly temporary) caching mechanism.
                -> ExceptT Text IO SigHash
-sigHashForTxIn tx@Tx {..} txIn mTxOutCache = do
+sigHashForTxIn tx@Tx {..} txIn p2shOrP2PKH = do
   -- {{{
   txInsBSs <- mapM
                 ( \txIn' ->
-                    if txIn == txIn' then do
-                      txOut <- case mTxOutCache of
-                                  Just txOutCache  ->
-                                    return txOutCache
-                                  Nothing ->
-                                    getTxInsTxOut txTestnet txIn
-                      return $
-                        TxIn.serializeWithCustomScriptSig
-                          (serialize $ txOutScriptPubKey txOut)
-                          txIn
+                    if txIn == txIn' then
+                      case p2shOrP2PKH of
+                        Left redeemScript ->
+                          -- {{{
+                          return $
+                            TxIn.serializeWithCustomScriptSig
+                              (serialize redeemScript)
+                              txIn
+                          -- }}}
+                        Right mTxOutCache -> do
+                          -- {{{
+                          txOut <- case mTxOutCache of
+                                      Just txOutCache  ->
+                                        return txOutCache
+                                      Nothing ->
+                                        getTxInsTxOut txTestnet txIn
+                          return $
+                            TxIn.serializeWithCustomScriptSig
+                              (serialize $ txOutScriptPubKey txOut)
+                              txIn
+                          -- }}}
                     else
                       return $ TxIn.serializeWithoutScriptSig txIn
                 )
@@ -176,14 +190,22 @@ sigHashForTxIn tx@Tx {..} txIn mTxOutCache = do
 
 
 -- | Verifies a specific `TxIn` of a transaction.
---     (1) Finds the `SigHash` of the `TxIn` in question.
+--     (1) Finds the `SigHash` of the `TxIn` in question based on the scheme.
 --     2.  Uses this `SigHash` to verify the stack of its
 --         `ScriptSig` atop its corresponding `ScriptPubKey`.
-verifyTxIn :: Tx -> TxIn -> ExceptT Text IO ()
-verifyTxIn tx@Tx {..} txIn = do
+verifyTxInFor :: Script.Scheme -> Tx -> TxIn -> ExceptT Text IO ()
+verifyTxInFor scheme tx@Tx {..} txIn = do
   -- {{{
   txOut   <- getTxInsTxOut txTestnet txIn
-  sigHash <- sigHashForTxIn tx txIn (Just txOut)
+  sigHash <- case scheme of
+               Script.P2PKH ->
+                 sigHashForTxIn tx txIn (Right $ Just txOut)
+               Script.P2SH -> do
+                 redeemScript <- Script.getRedeemScript
+                                   (txInScriptSig     txIn )
+                                   (txOutScriptPubKey txOut)
+                                 & except
+                 sigHashForTxIn tx txIn (Left redeemScript)
   except $ Script.validate
     (txInScriptSig     txIn )
     (txOutScriptPubKey txOut)
@@ -276,4 +298,8 @@ sampleTxBS =
   <> TxOut.sampleTxOut1
   <> TxOut.sampleTxOut2
   <> integralToNBytes 4 0x19430600
+
+
+sampleP2SH :: ByteString
+sampleP2SH = integerToBS 0x0100000001868278ed6ddfb6c1ed3ad5f8181eb0c7a385aa0836f01d5e4789e6bd304d87221a000000475221022626e955ea6ea6d98850c994f9107b036b1334f18ca8830bfff1295d21cfdb702103b287eaf122eea69030a0e9feed096bed8045c8b98bec453e1ffac7fbdbd4bb7152aeffffffff04d3b11400000000001976a914904a49878c0adfc3aa05de7afad2cc15f483a56a88ac7f400900000000001976a914418327e3f3dda4cf5b9089325a4b95abdfa0334088ac722c0c00000000001976a914ba35042cfe9fc66fd35ac2224eebdafd1028ad2788acdc4ace020000000017a91474d691da1574e6b3c192ecfb52cc8984ee7b6c56870000000001000000
 -- }}}

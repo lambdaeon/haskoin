@@ -72,9 +72,9 @@ testnetPayTo prevTx prevIndex targetAmount toAddr = do
           , txLocktime = Locktime.make 0
           , txTestnet  = True
           }
-    nonce   <-   liftIO
-               $ fromInteger . bsToInteger . LBS.fromStrict <$> getRandomBytes 8
-    sigHash <- Tx.sigHashForTxIn initTx txIn (Just txInsTxOut)
+    nonce     <-   liftIO
+                 $ fromInteger . bsToInteger . LBS.fromStrict <$> getRandomBytes 8
+    sigHash   <- Tx.sigHashForTxIn initTx txIn (Right $ Just txInsTxOut)
     signature <- except $ signWith ECC.testnetPrivateKey nonce sigHash
     let der       = serialize signature
         sig       = der `LBS.snoc` 0x01

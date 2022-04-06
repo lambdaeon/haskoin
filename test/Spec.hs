@@ -16,6 +16,7 @@ import qualified FieldElement                as FE
 import qualified FiniteFieldEllipticCurve    as FFEC
 import qualified Script
 import qualified Script.PayToPubKeyHash      as P2PKH
+import qualified Script.PayToScriptHash      as P2SH
 import qualified ECC
 import qualified Text.Megaparsec             as P
 import qualified Tx
@@ -41,7 +42,7 @@ main = do
   let verifyFetchRes fetchRes =
         case fetchRes of
           Right tx ->
-            runExceptT $ Tx.verify tx
+            runExceptT $ Tx.verifyFor Script.P2PKH tx
           Left err ->
             return $ Left err
   realTx01Verified <- verifyFetchRes realTx01FetchRes
@@ -460,6 +461,22 @@ main = do
         (seq (myTrace "\n\nTHE TX: " (encodeHex . serialize <$> synthTx03)) $ isRight synthTx03) `shouldBe` True
       it "The created transaction is valid." $ do
         (myTrace "\nRESULT OF VERIFYING THE TX: " synthTx03Verified) `shouldBe` (Right ())
+      -- }}}
+
+    describe "\nChapter 8 - Exercise 3" $ do
+      -- {{{
+      let h160 = integerToBS 0x74d691da1574e6b3c192ecfb52cc8984ee7b6c56
+          p2shAddr = showBase58EncodedBS $ P2SH.hash160ToAddress False h160
+      it "P2SH address from the HASH160 ('74d691da1574e6b3c192ecfb52cc8984ee7b6c56') is '3CLoMMyuoDQTPRD3XYZtCvgvkadrAdvdXh'." $ do
+        p2shAddr `shouldBe` (Right "3CLoMMyuoDQTPRD3XYZtCvgvkadrAdvdXh")
+      -- }}}
+
+    describe "\nChapter 8 - Exercise 4" $ do
+      -- {{{
+      let parseRes :: ParseResult Tx.Tx
+          parseRes = P.runParser parser "" Tx.sampleP2SH
+      it "Sample pay-to-script-hash transaction verified successfully." $ do
+        (isRight $ Tx.verifyFor Script.P2SH <$> parseRes) `shouldBe` True
       -- }}}
 
 

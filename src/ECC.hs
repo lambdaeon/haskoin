@@ -185,6 +185,9 @@ secParser = do
 
 -- | Converts the public key point to its "human readable"
 --   Bitcoin address (encoded in Base58).
+--
+--   (This was initially written in chapter 4, now in chapter 8
+--   this is referred to as @h160_to_p2pkh_address@.)
 address :: Bool -> Bool -> PubKey -> ByteString
 address compressed testnet point =
   -- {{{
