@@ -1,6 +1,8 @@
 module Main where
 
 
+import qualified Block
+import qualified BlockBits
 import           Debug.Trace                 (trace)
 import qualified Data.ByteString.Lazy        as LBS
 import           Data.Either                 (isRight)
@@ -477,6 +479,50 @@ main = do
           parseRes = P.runParser parser "" Tx.sampleP2SH
       it "Sample pay-to-script-hash transaction verified successfully." $ do
         (isRight $ Tx.verifyFor Script.P2SH <$> parseRes) `shouldBe` True
+      -- }}}
+
+    describe "\nChapter 9 - Exercise 3" $ do
+      -- {{{
+      let parseRes :: ParseResult Block.Block
+          parseRes = P.runParser parser "" Block.sampleBS
+      it "Successfully parsed a sample block." $ do
+        (isRight parseRes) `shouldBe` True
+      -- }}}
+
+    describe "\nChapter 9 - Exercise 5" $ do
+      -- {{{
+      let parseRes :: ParseResult Block.Block
+          parseRes = P.runParser parser "" Block.sampleBS
+          ans = 0x0000000000000000007e9e4c586439b0cdbe13b1370bdd9435d76a644d047523
+      it "Successfully found the ID of a sample block." $ do
+        ((bsToIntegerLE . Block.getId) <$> parseRes) `shouldBe` (Right ans)
+      -- }}}
+
+    describe "\nChapter 9 - Exercise 9" $ do
+      -- {{{
+      let mBlockBits = BlockBits.fromByteString $ integerToBS 0xe93c0118
+      it "Successfully found the target value from a sample BlockBits." $ do
+        shouldBe
+          (BlockBits.toTarget <$> mBlockBits)
+          (Just 0x13ce9000000000000000000000000000000000000000000)
+      -- }}}
+
+    describe "\nChapter 9 - Exercise 10" $ do
+      -- {{{
+      let parseRes :: ParseResult Block.Block
+          parseRes = P.runParser parser "" Block.sampleBS
+          eithDiff = Block.difficulty <$> parseRes
+          compFn x = x == 888171856257.3206
+      it "Difficulty of the given sample computed successfully." $ do
+        (compFn <$> (myTrace "\nDIFFICULTY VALUE: " eithDiff)) `shouldBe` (Right True)
+      -- }}}
+
+    describe "\nChapter 9 - Exercise 11" $ do
+      -- {{{
+      let parseRes :: ParseResult Block.Block
+          parseRes = P.runParser parser "" Block.sampleBS
+      it "Block proof-of-work confirmation succeeded for a sample." $ do
+        (Block.confirm <$> parseRes) `shouldBe` (Right True)
       -- }}}
 
 

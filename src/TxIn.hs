@@ -64,7 +64,7 @@ instance Serializable TxIn where
     txInScriptSig  <- parser
     txInSequence   <- word32ParserLE "sequence"  
     return $ TxIn {..}
-  -- }}}
+    -- }}}
 
 
 -- | Helper serialization function to allow different serialization

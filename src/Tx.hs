@@ -2,7 +2,7 @@
 -- {{{
 module Tx
   ( Tx (..)
-  , getTxId
+  , getId
   , fetch
   , fee
   , getTxInsTxOut
@@ -20,7 +20,6 @@ module Tx
 -- {{{
 import           Debug.Trace                 (trace)
 import           Control.Monad               (replicateM, forM, when)
-import           Data.ByteString.Lazy        (ByteString)
 import qualified Data.ByteString.Lazy        as LBS
 import qualified Data.ByteString             as BS
 import           Data.Char                   (chr)
@@ -62,8 +61,8 @@ data Tx = Tx
 
 
 -- | HASH256 of a serialized transaction.
-getTxId :: Tx -> ByteString
-getTxId tx = hash256 $ serialize tx
+getId :: Tx -> ByteString
+getId = hash256 . serialize
 
 
 instance Serializable Tx where
