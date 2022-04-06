@@ -267,6 +267,53 @@ getTxInAmount testnet txIn = do
   -- }}}
 
 
+
+-- ** Coinbase
+
+-- | Determines whether a `Tx` is a coinbase transaction. Returns the
+--   possible lone `TxIn` for convenience. There are 3 predicates:
+--     (1) The transaction must have only one input.
+--     2.  The previous transaction ID this `TxIn` points to
+--         must be 32 bytes of @0x00@.
+--     3.  Its output index must be @0xffffffff@ (max bound of `Word32`).
+getCoinbaseTxIn :: Tx -> Maybe TxIn
+getCoinbaseTxIn Tx {..} =
+  -- {{{
+  case txTxIns of
+    [txIn@TxIn {..}]
+      |    txInPrevTx    == LBS.replicate 32 0x00
+        && txInPrevIndex == maxBound ->
+      Just txIn
+    _ ->
+      Nothing
+  -- }}}
+
+
+-- | Get the block number of a coinbase transaction.
+coinbaseHeight :: Tx -> Either Text Integer
+coinbaseHeight tx@Tx {..} =
+  -- {{{
+  case getCoinbaseTxIn tx of
+    Just txIn@TxIn {..} ->
+      -- {{{
+      case txInScriptSig of
+        Script.Script (Script.Element heightBS : _) ->
+          -- {{{
+          Right $ bsToIntegerLE heightBS
+          -- }}}
+        _                                           ->
+          -- {{{
+          Left "invalid coinbase scriptsig."
+          -- }}}
+      -- }}}
+    Nothing             ->
+      -- {{{
+      Left "not a coinbase transaction."
+      -- }}}
+  -- }}}
+
+
+
 -- SAMPLE VALUE
 -- {{{
 
