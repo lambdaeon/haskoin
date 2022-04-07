@@ -67,7 +67,7 @@ getId = hash256 . serialize
 
 -- | Check if block is BIP0009 compliant.
 bip9 :: Block -> Bool
-bip9   Block {..} = blockVersion `Bits.shiftR` 29        == setBit zeroBits 1
+bip9   Block {..} = blockVersion `Bits.shiftR` 29        == zeroBits `setBit` 0
 
 
 -- | Check if block is BIP0091 compliant.
