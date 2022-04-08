@@ -1,6 +1,7 @@
 module Extension.ByteString.Parser where
 
 
+import           Data.ByteString.Lazy (ByteString)
 import           Text.Megaparsec      (Parsec)
 import qualified Text.Megaparsec      as P
 import qualified Text.Megaparsec.Byte as BP
@@ -19,3 +20,7 @@ word32ParserLE :: String -- ^ Label for better parsing messages.
 word32ParserLE lbl = fromInteger . bsToIntegerLE <$> P.takeP (Just lbl) 4
 
 
+myDbg :: String -> Parser ByteString -> Parser ByteString
+myDbg lbl prsr = do
+  parsed <- prsr
+  return $ seq (trace (lbl ++ show (encodeHex parsed)) parsed) parsed

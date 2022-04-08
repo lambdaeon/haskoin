@@ -1,6 +1,7 @@
 module BlockBits where
 
 
+import           Data.Bits
 import qualified Data.ByteString.Lazy        as LBS
 import           Data.Serializable
 import qualified Text.Megaparsec             as P
@@ -43,16 +44,49 @@ toTarget BlockBits {..} =
   -- }}}
 
 
+-- | Converts an integer back to a `BlockBits` value.
+fromTarget :: Integer -> Either Text BlockBits
+fromTarget n =
+  -- {{{
+  let
+    bs = integerToBS n
+  in
+  case LBS.unpack bs of
+    b0 : b1 : rest | b0 > 0x7f ->
+      -- {{{
+      Right $ BlockBits
+        { bbExp       = fromIntegral (LBS.length bs) + 1
+        , bbLeftByte  = b1
+        , bbMidByte   = b0
+        , bbRightByte = 0x00
+        }
+      -- }}}
+    b0 : b1 : b2 : rest ->
+      -- {{{
+      Right $ BlockBits
+        { bbExp       = fromIntegral (LBS.length bs)
+        , bbLeftByte  = b2
+        , bbMidByte   = b1
+        , bbRightByte = b0
+        }
+      -- }}}
+    _                        ->
+      -- {{{
+      Left "invalid target."
+      -- }}}
+  -- }}}
+
+
 -- | A more explicit function (compared to its parser) to get a `BlockBits`
 --   from a 4 byte long `ByteString`.
-fromByteString :: ByteString -> Maybe BlockBits
+fromByteString :: ByteString -> Either Text BlockBits
 fromByteString bs =
   -- {{{
   case LBS.unpack bs of
     [bbLeftByte, bbMidByte, bbRightByte, bbExp] ->
-      Just $ BlockBits {..}
+      Right $ BlockBits {..}
     _                                           ->
-      Nothing
+      Left "invalid bytestring for bits."
   -- }}}
 
 

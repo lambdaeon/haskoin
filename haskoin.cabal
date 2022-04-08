@@ -24,8 +24,8 @@ source-repository head
 
 library
   exposed-modules:
-      Block
       BlockBits
+      BlockHead
       Data.Serializable
       Data.Varint
       ECC

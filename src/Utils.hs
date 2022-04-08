@@ -1,7 +1,10 @@
 -- MODULE
 -- {{{
 module Utils
-  ( encodeHex
+  ( threeAndAHalfDays
+  , twoWeeks
+  , eightWeeks
+  , encodeHex
   , encodeHexLE
   , encodeBase58
   , decodeHex
@@ -46,6 +49,7 @@ module Utils
   , fromTwoEitherValues
   , explainMaybe
   , mapLeft
+  , clamp
   , trace
   , myTrace
   , module Control.Monad.IO.Class
@@ -101,6 +105,18 @@ import qualified Extension.ByteString.Lazy   as LBS
 import           Numeric                     (showIntAtBase)
 -- }}}
 
+
+-- CONSTANTS
+-- {{{
+threeAndAHalfDays :: Num a => a
+threeAndAHalfDays = 60 * 60 * (24 * 3 + 12)
+
+twoWeeks :: Num a => a
+twoWeeks = threeAndAHalfDays * 4
+
+eightWeeks :: Num a => a
+eightWeeks = twoWeeks * 4
+-- }}}
 
 -- FUNCTIONS
 -- {{{
@@ -663,6 +679,16 @@ explainMaybe _          (Just x) = Right x
 mapLeft :: (e -> e') -> Either e a -> Either e' a
 mapLeft _ (Right x)  = Right x
 mapLeft f (Left err) = Left $ f err
+
+
+-- | From base-4.16.1:
+-- > clamp (low, high) a = min high (max a low)
+--
+-- Function for ensursing the value @a@ is within the inclusive bounds given by
+-- @low@ and @high@. If it is, @a@ is returned unchanged. The result
+-- is otherwise @low@ if @a <= low@, or @high@ if @high <= a@.
+clamp :: (Ord a) => (a, a) -> a -> a
+clamp (low, high) a = min high (max a low)
 
 
 -- | My own version of the `trace` function that shows the

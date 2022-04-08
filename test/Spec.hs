@@ -1,7 +1,7 @@
 module Main where
 
 
-import qualified Block
+import qualified BlockHead                   as BH
 import qualified BlockBits
 import           Debug.Trace                 (trace)
 import qualified Data.ByteString.Lazy        as LBS
@@ -483,19 +483,27 @@ main = do
 
     describe "\nChapter 9 - Exercise 3" $ do
       -- {{{
-      let parseRes :: ParseResult Block.Block
-          parseRes = P.runParser parser "" Block.sampleBS
+      let parseRes :: ParseResult BH.BlockHead
+          parseRes = P.runParser parser "" BH.sampleBS
+          parseRes471744 :: ParseResult BH.BlockHead
+          parseRes471744 = P.runParser parser "" BH.no471744
+          parseRes473759 :: ParseResult BH.BlockHead
+          parseRes473759 = P.runParser parser "" BH.no473759
       it "Successfully parsed a sample block." $ do
         (isRight parseRes) `shouldBe` True
+      it "Successfully parsed block#471744." $ do
+        (isRight parseRes471744) `shouldBe` True
+      it "Successfully parsed block#473759." $ do
+        (isRight parseRes473759) `shouldBe` True
       -- }}}
 
     describe "\nChapter 9 - Exercise 5" $ do
       -- {{{
-      let parseRes :: ParseResult Block.Block
-          parseRes = P.runParser parser "" Block.sampleBS
+      let parseRes :: ParseResult BH.BlockHead
+          parseRes = P.runParser parser "" BH.sampleBS
           ans = 0x0000000000000000007e9e4c586439b0cdbe13b1370bdd9435d76a644d047523
       it "Successfully found the ID of a sample block." $ do
-        ((bsToIntegerLE . Block.getId) <$> parseRes) `shouldBe` (Right ans)
+        ((bsToIntegerLE . BH.getId) <$> parseRes) `shouldBe` (Right ans)
       -- }}}
 
     describe "\nChapter 9 - Exercise 9" $ do
@@ -504,14 +512,14 @@ main = do
       it "Successfully found the target value from a sample BlockBits." $ do
         shouldBe
           (BlockBits.toTarget <$> mBlockBits)
-          (Just 0x13ce9000000000000000000000000000000000000000000)
+          (Right 0x13ce9000000000000000000000000000000000000000000)
       -- }}}
 
     describe "\nChapter 9 - Exercise 10" $ do
       -- {{{
-      let parseRes :: ParseResult Block.Block
-          parseRes = P.runParser parser "" Block.sampleBS
-          eithDiff = Block.difficulty <$> parseRes
+      let parseRes :: ParseResult BH.BlockHead
+          parseRes = P.runParser parser "" BH.sampleBS
+          eithDiff = BH.difficulty <$> parseRes
           compFn x = x == 888171856257.3206
       it "Difficulty of the given sample computed successfully." $ do
         (compFn <$> (myTrace "\nDIFFICULTY VALUE: " eithDiff)) `shouldBe` (Right True)
@@ -519,10 +527,44 @@ main = do
 
     describe "\nChapter 9 - Exercise 11" $ do
       -- {{{
-      let parseRes :: ParseResult Block.Block
-          parseRes = P.runParser parser "" Block.sampleBS
+      let parseRes :: ParseResult BH.BlockHead
+          parseRes = P.runParser parser "" BH.sampleBS
+          parseRes471744 :: ParseResult BH.BlockHead
+          parseRes471744 = P.runParser parser "" BH.no471744
+          parseRes473759 :: ParseResult BH.BlockHead
+          parseRes473759 = P.runParser parser "" BH.no473759
       it "Block proof-of-work confirmation succeeded for a sample." $ do
-        (Block.confirm <$> parseRes) `shouldBe` (Right True)
+        (BH.confirm <$> parseRes) `shouldBe` (Right True)
+      it "Block proof-of-work confirmation succeeded for block#471744." $ do
+        (BH.confirm <$> parseRes471744) `shouldBe` (Right True)
+      it "Block proof-of-work confirmation succeeded for block#473759." $ do
+        (BH.confirm <$> parseRes473759) `shouldBe` (Right True)
+      -- }}}
+
+    describe "\nChapter 9 - Exercise 12" $ do
+      -- {{{
+      let parseRes471744 =
+            mapLeft
+              (const "block 471744 parse failed.") 
+              (P.runParser parser "" BH.no471744)
+          parseRes473759 =
+            mapLeft
+              (const "block 473759 parse failed.")
+              (P.runParser parser "" BH.no473759)
+          newBits = do
+            bEnd   <- parseRes471744 -- The order of these two seems misplace,
+            bStart <- parseRes473759 -- but this is how the books does it.
+            BH.findNewBits bStart bEnd
+      it "New bits from block#471744 and block#473759 found successfully." $ do
+        shouldBe
+          newBits
+          ( Right $ BlockBits.BlockBits
+              { BlockBits.bbExp       = 0x17
+              , BlockBits.bbLeftByte  = 0x80
+              , BlockBits.bbMidByte   = 0xdf
+              , BlockBits.bbRightByte = 0x62
+              }
+          )
       -- }}}
 
 

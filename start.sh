@@ -23,11 +23,12 @@ remoteProjectDir="$remoteUser@$remoteIP:$remoteDir/$project"
 copyFiles() { # Copy the backend files to the remote server.
   # {{{
   echo "Copying files..."
-  rsync -a -e ssh            \
-    --exclude=".*"           \
-    --exclude="*.pdf"        \
-    --exclude="start.sh"     \
-    .                        \
+  rsync -a -e ssh                  \
+    --exclude=".*"                 \
+    --exclude="*.pdf"              \
+    --exclude="programmingbitcoin" \
+    --exclude="start.sh"           \
+    .                              \
     $remoteProjectDir
   echo -e "Done.\n"
   # }}}
