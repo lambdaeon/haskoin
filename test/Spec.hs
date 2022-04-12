@@ -12,6 +12,7 @@ import qualified Data.Varint                 as Varint
 import qualified Extension.ByteString.Lazy   as LBS
 import           Extension.ByteString.Parser
 import qualified Locktime
+import qualified Network
 import           Test.Hspec
 import           Test.Hspec.Megaparsec
 import qualified FieldElement                as FE
@@ -565,6 +566,14 @@ main = do
               , BlockBits.bbRightByte = 0x62
               }
           )
+      -- }}}
+
+    describe "\nChapter 10 - Exercise 2" $ do
+      -- {{{
+      let parseRes :: ParseResult Network.Envelope
+          parseRes = P.runParser parser "" Network.sampleEnvelopeBS
+      it "Successfully parsed a sample NetworkEnvelope value." $ do
+        (isRight (myTrace "\nNETWORK ENVELOPE PARSE RESULT: " parseRes)) `shouldBe` True
       -- }}}
 
 

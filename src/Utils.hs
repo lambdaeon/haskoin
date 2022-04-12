@@ -4,6 +4,8 @@ module Utils
   ( threeAndAHalfDays
   , twoWeeks
   , eightWeeks
+  , mainnetNetworkMagic
+  , testnetNetworkMagic
   , encodeHex
   , encodeHexLE
   , encodeBase58
@@ -49,6 +51,8 @@ module Utils
   , fromTwoEitherValues
   , explainMaybe
   , mapLeft
+  , getNByteNonce
+  , getPOSIX
   , clamp
   , trace
   , myTrace
@@ -63,7 +67,9 @@ module Utils
   , fromString
   , Text
   , Word8
+  , Word16
   , Word32
+  , Word64
   , Word
   , module Data.Void
   , void
@@ -79,6 +85,7 @@ import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
 import           Crypto.Hash                 (hashWith, SHA1 (..), SHA256 (..), RIPEMD160 (..))
+import           Crypto.Random               (getRandomBytes)
 import qualified Data.Binary                 as Bin
 import           Data.Bits
 import qualified Data.ByteArray              as BA
@@ -98,8 +105,9 @@ import           Data.String                 (fromString)
 import qualified Data.String                 as String
 import           Data.Text                   (Text)
 import qualified Data.Text                   as Text
+import           Data.Time.Clock.POSIX       (getPOSIXTime)
 import           Data.Void
-import           Data.Word                   (Word8, Word32, Word)
+import           Data.Word                   (Word8, Word16, Word32, Word64, Word)
 import qualified Extension.ByteString        as BS
 import qualified Extension.ByteString.Lazy   as LBS
 import           Numeric                     (showIntAtBase)
@@ -111,12 +119,23 @@ import           Numeric                     (showIntAtBase)
 threeAndAHalfDays :: Num a => a
 threeAndAHalfDays = 60 * 60 * (24 * 3 + 12)
 
+
 twoWeeks :: Num a => a
 twoWeeks = threeAndAHalfDays * 4
 
+
 eightWeeks :: Num a => a
 eightWeeks = twoWeeks * 4
+
+
+mainnetNetworkMagic :: ByteString
+mainnetNetworkMagic = integralToNBytes 4 0xf9beb4d9
+
+
+testnetNetworkMagic :: ByteString
+testnetNetworkMagic = integralToNBytes 4 0x0b110907
 -- }}}
+
 
 -- FUNCTIONS
 -- {{{
@@ -679,6 +698,17 @@ explainMaybe _          (Just x) = Right x
 mapLeft :: (e -> e') -> Either e a -> Either e' a
 mapLeft _ (Right x)  = Right x
 mapLeft f (Left err) = Left $ f err
+
+
+-- | Helper function for nonce generation.
+getNByteNonce :: Num a => Int -> IO a
+getNByteNonce n =
+  fromInteger . bsToInteger . LBS.fromStrict <$> getRandomBytes n
+
+
+-- | A more generic version of @getPOSIXTime@.
+getPOSIX :: Num a => IO a
+getPOSIX = fromIntegral . round <$> getPOSIXTime
 
 
 -- | From base-4.16.1:

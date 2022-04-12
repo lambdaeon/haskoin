@@ -1,4 +1,4 @@
-cabal-version: 1.12
+cabal-version: 3.6
 
 -- This file has been generated from package.yaml by hpack version 0.34.5.
 --
@@ -12,7 +12,8 @@ bug-reports:    https://github.com/lambdaeon/haskoin/issues
 author:         λeon
 maintainer:     lambdaeon@protonmail.com
 copyright:      2022 ΛEON
-license:        BSD3
+-- license:        BSD3
+license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
@@ -36,6 +37,9 @@ library
       FieldElement
       FiniteFieldEllipticCurve
       Locktime
+      Network
+      Network.Common
+      Network.Messages
       Script
       Script.PayToPubKeyHash
       Script.PayToScriptHash

@@ -25,6 +25,7 @@ copyFiles() { # Copy the backend files to the remote server.
   echo "Copying files..."
   rsync -a -e ssh                  \
     --exclude=".*"                 \
+    --exclude="dist*"              \
     --exclude="*.pdf"              \
     --exclude="programmingbitcoin" \
     --exclude="start.sh"           \
@@ -60,12 +61,14 @@ runLocalStackTest() { # Run the tests for the given exercise locally.
   case $1 in
     all)
       echo -e "Running all the tests:\n"
-      stack test --fast
+      # stack test --fast
+      cabal test --test-show-details always
       ;;
     *)
       argument="Chapter $1 - Exercise $2"
       echo -e "Running tests for $argument:\n"
-      final="stack test --fast --test-arguments='--match \"$argument\"'"
+      final="cabal test --test-show-details always --test-options='--match \"$argument\"'"
+      # final="stack test --fast --test-arguments='--match \"$argument\"'"
       touch test.sh
       echo $final >> test.sh
       # source test.sh

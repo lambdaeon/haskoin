@@ -1,7 +1,6 @@
 module Script.PayToPubKeyHash where
 
 
-import           Crypto.Random           (getRandomBytes)
 import qualified Data.ByteString.Lazy as LBS
 import           Data.Serializable
 import qualified Locktime
@@ -72,8 +71,7 @@ testnetPayTo prevTx prevIndex targetAmount toAddr = do
           , txLocktime = Locktime.make 0
           , txTestnet  = True
           }
-    nonce     <-   liftIO
-                 $ fromInteger . bsToInteger . LBS.fromStrict <$> getRandomBytes 8
+    nonce     <- liftIO $ getNByteNonce 8
     sigHash   <- Tx.sigHashForTxIn initTx txIn (Right $ Just txInsTxOut)
     signature <- except $ signWith ECC.testnetPrivateKey nonce sigHash
     let der       = serialize signature
