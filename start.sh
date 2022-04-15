@@ -41,7 +41,7 @@ runRemoteCommand() { # Run a given command on the remote machine via ssh.
   # }}}
 }
 
-runStackTest() { # Run the tests for the given exercise.
+runTest() { # Run the tests for the given exercise.
   # {{{
   case $1 in
     all)
@@ -56,7 +56,7 @@ runStackTest() { # Run the tests for the given exercise.
   # }}}
 }
 
-runLocalStackTest() { # Run the tests for the given exercise locally.
+runLocalTest() { # Run the tests for the given exercise locally.
   # {{{
   case $1 in
     all)
@@ -101,18 +101,31 @@ case $1 in
   test)
     # {{{
     lintAndCopy
-    runStackTest $2 $3
+    runTest $2 $3
     ;;
     # }}}
   localTest)
     # {{{
     lint
-    runLocalStackTest $2 $3
+    runLocalTest $2 $3
     ;;
     # }}}
   noLint)
     # {{{
     copyFiles
+    ;;
+    # }}}
+  publish)
+    # {{{
+    cp README.md .tempReadme.md
+    echo -e "\n## Library Directory Structure\n" >> README.md
+    echo '```' >> README.md
+    tree src >> README.md
+    echo '```' >> README.md
+    git add .
+    git commit -m "$2"
+    git push
+    mv .tempReadme.md README.md
     ;;
     # }}}
   *)

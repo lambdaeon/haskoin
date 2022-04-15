@@ -67,6 +67,8 @@ library
     , base16
     , binary
     , bytestring
+    , conduit
+    , conduit-extra
     , containers
     , cryptonite
     , groups

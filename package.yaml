@@ -23,6 +23,8 @@ dependencies:
 - base16
 - binary
 - bytestring
+- conduit
+- conduit-extra
 - containers
 - cryptonite
 - groups
@@ -62,6 +64,8 @@ executables:
     - base16
     - binary
     - bytestring
+    - conduit
+    - conduit-extra
     - containers
     - cryptonite
     - groups
