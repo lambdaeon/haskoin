@@ -32,7 +32,7 @@ instance Serializable BlockBits where
     -- }}}
 
 
--- | Finds the minig target based on a `BlockBits` value.
+-- | Finds the mining target based on a `BlockBits` value.
 toTarget :: BlockBits -> Integer
 toTarget BlockBits {..} =
   -- {{{

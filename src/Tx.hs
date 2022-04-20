@@ -10,6 +10,8 @@ module Tx
   , sigHashForTxIn
   , verifyFor
   , verifyTxInFor
+  , getCoinbaseTxIn
+  , coinbaseHeight
   , sampleTxBS
   , sampleP2SH
   ) where
@@ -129,18 +131,25 @@ verifyFor scheme tx@Tx {..} = do
 --   of the transaction for a specific `TxIn` of it.
 --     (1) Goes through all the `TxIn` values and serialize them with
 --         @0x00@ instead of their own `ScriptSig`.
+--
 --     2.  When it reaches the `TxIn` in question:
+--
 --           * For p2pkh, looks up the block explorer (if no `TxOut` is
 --             provided), takes the corresponding `TxOut`'s `ScriptPubKey`
 --             and used its serialization to serialize the `TxIn`.
+--
 --           * For p2sh, attempts to find the RedeemScript from its own
 --             `ScriptSig`, and put its serialization in place of the
 --             empty script.
+--
 --     3.  Serializes the `Tx` with this customized serialization of the `TxIn`
 --         values.
+--
 --     4.  Appends @SIGHASH_ALL@ with @0x01@ in 4 little-endian bytes to the
 --         custom serialization of the `Tx`.
+--
 --     5.  Performs a `hash256` on the result.
+--
 --     6.  Converts this hashed bytestring to the `SigHash` value (which
 --         is a `S256Order` value, which in turn is a `FieldElement` with
 --         the prime of `n` from @SECP256K1@). This `Num` is interpreted
@@ -190,6 +199,7 @@ sigHashForTxIn tx@Tx {..} txIn p2shOrP2PKH = do
 
 -- | Verifies a specific `TxIn` of a transaction.
 --     (1) Finds the `SigHash` of the `TxIn` in question based on the scheme.
+--
 --     2.  Uses this `SigHash` to verify the stack of its
 --         `ScriptSig` atop its corresponding `ScriptPubKey`.
 verifyTxInFor :: Script.Scheme -> Tx -> TxIn -> ExceptT Text IO ()
@@ -272,8 +282,10 @@ getTxInAmount testnet txIn = do
 -- | Determines whether a `Tx` is a coinbase transaction. Returns the
 --   possible lone `TxIn` for convenience. There are 3 predicates:
 --     (1) The transaction must have only one input.
+--
 --     2.  The previous transaction ID this `TxIn` points to
 --         must be 32 bytes of @0x00@.
+--
 --     3.  Its output index must be @0xffffffff@ (max bound of `Word32`).
 getCoinbaseTxIn :: Tx -> Maybe TxIn
 getCoinbaseTxIn Tx {..} =

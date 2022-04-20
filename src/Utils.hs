@@ -139,7 +139,7 @@ testnetNetworkMagic = integralToNBytes 4 0x0b110907
 
 -- FUNCTIONS
 -- {{{
--- | List of valid character for Base58.
+-- | List of valid characters for Base58.
 base58Chars :: [Word8]
 base58Chars =
   -- {{{
@@ -233,7 +233,7 @@ base58ToInteger bs =
 
 
 -- | Pretty prints an integral number with Base58 encoding
---   (utilizes `showIntAtBase` function from %{Numeric}).
+--   (utilizes `showIntAtBase` function from @Numeric@).
 showIntegralInBase58 :: (Integral a, Show a) => a -> Either Text String
 showIntegralInBase58 x
   -- {{{
@@ -674,7 +674,7 @@ xs !? n
   -- }}}
 
 
--- | This should've been imported from %{Control.Monad.IO.Class},
+-- | This should've been imported from @Control.Monad.IO.Class@,
 --   but there seems to be an issue. So I've redefined it for the
 --   time being.
 hoistMaybe :: Applicative m => Maybe b -> MaybeT m b

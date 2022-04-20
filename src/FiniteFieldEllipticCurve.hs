@@ -95,7 +95,7 @@ instance (KnownNat p, KnownNat a, KnownNat b) => Group (Point p a b) where
 instance (KnownNat p, KnownNat a, KnownNat b) => Abelian (Point p a b)
 
 
--- | As the point may lie in infinitey, the output is an `Either`.
+-- | As the point may lie in infinity, the output is an `Either`.
 getX :: Point p a b -> Either Text (FieldElement p)
 getX  Inf        = Left "point at infinity."
 getX (Point x _) = Right x
@@ -151,7 +151,7 @@ findOrderFrom p   =
 
 
 -- | Scalar multiplication of a point. Utilizes the `pow` function
---   from %{Data.Group} module.
+--   from @Data.Group@ module.
 scaleBy :: (KnownNat p, KnownNat a, KnownNat b)
         => Integer
         -> Point p a b

@@ -82,7 +82,7 @@ minShow (FE x) = show x
 
 -- | A more efficient power function, which can also handle
 --   negative exponents. This is based on Fermat's Little Theorem
---   which states \(a ^ (m - 1) = 1\). Meaning \(m - 1\) can be
+--   which states \(a^{(m-1)}=1\). Meaning \(m-1\) can be
 --   added (or reduced) to (or from) the given exponent enough
 --   times until it's positive (or smaller than @m@). This multiple
 --   addition/subraction is equivalent to performing a @mod@ with @m@.

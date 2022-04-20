@@ -15,7 +15,7 @@ import qualified Text.Megaparsec.Debug       as P
 import           Utils
 
 
--- | A newtype wrapper for a `Word32` to represent a varint.
+-- | A newtype wrapper for a `Word` to represent a varint.
 newtype Varint = Varint
   { unVarint :: Word
   } deriving (Eq, Show)
@@ -23,9 +23,13 @@ newtype Varint = Varint
 instance Serializable Varint where
   -- | Serialization of a varint into different
   --   number of bytes, depending on the wrapped value:
+  --
   --   * If it's less than @0xfd@ (or \(253\)), it'll be encoded in 1 byte.
+  --
   --   * If it's less than @0x10000@ (or \(2^16\)), it'll be encoded in 3 bytes.
+  --
   --   * If it's less than @0x100000000@ (or \(2^32\)), it'll be encoded in 5 bytes.
+  --
   --   * Anything bigger (up to \(2^64 - 1\)) will be encoded in 9 bytes.
   serialize = serializeHelper False
   -- | Can consume up to 9 bytes.
@@ -52,7 +56,7 @@ instance Serializable Varint where
     -- }}}
 
 
--- | Serialized a list of `Serializable` values, concat them,
+-- | Serializes a list of `Serializable` values, concat them,
 --   and prepend their count as a `Varint` for the first byte.
 serializeList :: Serializable a => [a] -> ByteString
 serializeList [] = LBS.singleton 0
