@@ -4,14 +4,14 @@ module Network.Common where
 import qualified Data.ByteString.Lazy        as LBS
 import           Data.Serializable
 import           Extension.ByteString.Parser
+import qualified Network.Socket              as Socket
 import qualified Text.Megaparsec             as P
 import           Utils
 
 
 data IP
-  = IPv4     Word8 Word8 Word8 Word8
-  | IPv6     Word16 Word16 Word16 Word16 Word16 Word16 Word16 Word16
-  | OnionCat ByteString
+  = IPv4 Word8 Word8 Word8 Word8
+  | IPv6 Word16 Word16 Word16 Word16 Word16 Word16 Word16 Word16
   deriving (Eq, Show)
 
 
@@ -27,10 +27,6 @@ instance Serializable IP where
         serialize
     <$> [bs0, bs1, bs2, bs3, bs4, bs5, bs6, bs7]
     & LBS.concat
-    -- }}}
-  serialize (OnionCat bs) =
-    -- {{{
-    bs
     -- }}}
   parser = do
     -- {{{
@@ -56,17 +52,13 @@ toIPv4Attempt ip@(IPv6 bs0 bs1 bs2 bs3 bs4 bs5 bs6 bs7)
     && bs2 == 0x0000
     && bs3 == 0x0000
     && bs4 == 0x0000
-    && bs4 == 0xffff            =
+    && bs4 == 0xffff     =
       case LBS.unpack (serialize bs6 <> serialize bs7) of
         [b0, b1, b2, b3] ->
           IPv4 b0 b1 b2 b3
         _ ->
           ip
-  | otherwise                   = ip
+  | otherwise            = ip
   -- }}}
-toIPv4Attempt ip@(OnionCat _)   = ip
-
-
-
 
 

@@ -39,11 +39,11 @@ library
       Locktime
       Network
       Network.Common
-      Network.Messages
       Script
       Script.PayToPubKeyHash
       Script.PayToScriptHash
       SECP256K1
+      SimpleNode
       TestnetWalletPassPhrase
       Tx
       TxIn

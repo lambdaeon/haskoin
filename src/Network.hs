@@ -2,14 +2,19 @@ module Network where
 
 
 import qualified Data.ByteString.Lazy        as LBS
+import           Data.Varint                 (Varint (..))
+import qualified Data.Varint                 as Varint
 import           Data.Serializable
 import           Extension.ByteString.Parser
+import           Network.Common
 import           Text.Megaparsec             ((<|>))
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Byte        as BP
 import           Utils
 
 
+-- ENVELOPE
+-- {{{
 data Envelope = Envelope
   { envCommand :: ByteString
   , envPayload :: ByteString
@@ -56,7 +61,110 @@ instance Serializable Envelope where
     else
       fail "payload checksum failed."
     -- }}}
+-- }}}
 
+
+-- MESSAGE
+-- {{{
+data Message
+  = Version VersionMsgInfo
+  | VerAck  VerAckMsgInfo
+
+
+-- VersionMsgInfo
+-- {{{
+data VersionMsgInfo = VersionMsgInfo
+  { verProtocolVersion  :: Word32
+  , verServices         :: Word64
+  , verTimestamp        :: Word64
+  , verReceiverServices :: Word64
+  , verReceiverIP       :: IP
+  , verReceiverPort     :: Word16
+  , verSenderServices   :: Word64
+  , verSenderIP         :: IP
+  , verSenderPort       :: Word16
+  , verNonce            :: Word64
+  , verUserAgent        :: ByteString
+  , verLatestBlock      :: Word64
+  , verRelay            :: Bool
+  } deriving (Eq, Show)
+
+instance Serializable VersionMsgInfo where
+  serialize VersionMsgInfo {..} =
+    -- {{{
+       serialize verProtocolVersion
+    <> serialize verServices
+    <> serialize verTimestamp
+    <> serialize verReceiverServices
+    <> serialize verReceiverIP
+    <> serialize verReceiverPort
+    <> serialize verSenderServices
+    <> serialize verSenderIP
+    <> serialize verSenderPort
+    <> serialize verNonce
+    <> serialize (Varint $ fromIntegral $ LBS.length verUserAgent)
+    <> verUserAgent
+    <> serialize verLatestBlock
+    <> serialize verRelay
+    -- }}}
+  parser = do    
+    -- {{{
+    verProtocolVersion  <- parser
+    verServices         <- parser
+    verTimestamp        <- parser
+    verReceiverServices <- parser
+    verReceiverIP       <- parser
+    verReceiverPort     <- parser
+    verSenderServices   <- parser
+    verSenderIP         <- parser
+    verSenderPort       <- parser
+    verNonce            <- parser
+    uaLen               <- Varint.countParser
+    verUserAgent        <- P.takeP (Just "network version message user agent.") uaLen
+    verLatestBlock      <- parser
+    verRelay            <- parser
+    return $ VersionMsgInfo {..}
+    -- }}}
+
+makeVersionMsg :: Maybe Word64 -> Maybe Word64 -> ExceptT Text IO Message
+makeVersionMsg mTS mNonce = do
+  -- {{{
+  verTimestamp <- case mTS of
+                    Just ts    -> return ts
+                    Nothing    -> liftIO getPOSIX
+  verNonce     <- case mNonce of
+                    Just nonce -> return nonce
+                    Nothing    -> liftIO $ getNByteNonce 8
+  let verProtocolVersion  = 70015
+      verServices         = 0
+      verReceiverServices = 0
+      verReceiverIP       = IPv4 0 0 0 0
+      verReceiverPort     = 8333
+      verSenderServices   = 0
+      verSenderIP         = IPv4 0 0 0 0
+      verSenderPort       = 8333
+      verUserAgent        = "programmingbitcoin:0.1"
+      verLatestBlock      = 0
+      verRelay            = False
+  return $ Version $ VersionMsgInfo {..}
+  -- }}}
+-- }}}
+
+
+-- VerAckMsgInfo
+-- {{{
+data VerAckMsgInfo = VerAckMsgInfo
+
+instance Serializable VerAckMsgInfo where
+  serialize _ = "verack"
+  parser      = VerAckMsgInfo <$ BP.string "verack"
+-- }}}
+
+
+serializeMessage :: Message -> ByteString
+serializeMessage (Version verMsgInfo) = serialize verMsgInfo
+serializeMessage (VerAck  verAckInfo) = serialize verAckInfo
+-- }}}
 
 
 
