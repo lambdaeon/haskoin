@@ -129,7 +129,8 @@ verifyFor scheme tx@Tx {..} = do
 
 -- | Generates the signature hash ("fingerprint" of the signed message)
 --   of the transaction for a specific `TxIn` of it.
---     (1) Goes through all the `TxIn` values and serialize them with
+--
+--     (1) Goes through all the `TxIn` values and serializes them with
 --         @0x00@ instead of their own `ScriptSig`.
 --
 --     2.  When it reaches the `TxIn` in question:
@@ -198,6 +199,7 @@ sigHashForTxIn tx@Tx {..} txIn p2shOrP2PKH = do
 
 
 -- | Verifies a specific `TxIn` of a transaction.
+--
 --     (1) Finds the `SigHash` of the `TxIn` in question based on the scheme.
 --
 --     2.  Uses this `SigHash` to verify the stack of its
@@ -281,6 +283,7 @@ getTxInAmount testnet txIn = do
 
 -- | Determines whether a `Tx` is a coinbase transaction. Returns the
 --   possible lone `TxIn` for convenience. There are 3 predicates:
+--
 --     (1) The transaction must have only one input.
 --
 --     2.  The previous transaction ID this `TxIn` points to

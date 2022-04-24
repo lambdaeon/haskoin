@@ -445,7 +445,7 @@ type ScriptSig    = Script
 type ScriptPubKey = Script
 
 
--- | Type alias for readability (RedeemScript withing a `ScriptSig`
+-- | Type alias for readability (RedeemScript within a `ScriptSig`
 --   for the pay-to-script-hash scheme).
 type RedeemScript = Script
 

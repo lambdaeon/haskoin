@@ -79,6 +79,7 @@ library
     , memory
     , mtl
     , network
+    , network-run
     , text
     , time
     , transformers
@@ -99,7 +100,7 @@ executable haskoin-exe
       TupleSections
       NumericUnderscores
       FlexibleInstances
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Weverything -O2
   build-depends:
       base >=4.7 && <5
     , base16
@@ -117,6 +118,7 @@ executable haskoin-exe
     , memory
     , mtl
     , network
+    , network-run
     , text
     , time
     , transformers
@@ -138,7 +140,7 @@ test-suite haskoin-test
       TupleSections
       NumericUnderscores
       FlexibleInstances
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Weverything
   build-depends:
       base >=4.7 && <5
     , base16
@@ -157,6 +159,7 @@ test-suite haskoin-test
     , memory
     , mtl
     , network
+    , network-run
     , text
     , time
     , transformers

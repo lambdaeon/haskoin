@@ -28,7 +28,7 @@ instance Show Envelope where
       showLBS bs
         | LBS.null bs = "<EMPTY BYTESTRING>"
         | otherwise   =
-            chr . fromIntegral <$> LBS.unpack bs
+            chr . fromIntegral <$> LBS.unpack (encodeHex bs)
     in
        "NetworkEnvelop {envCommand = "
     ++ showLBS envCommand
@@ -61,6 +61,25 @@ instance Serializable Envelope where
     else
       fail "payload checksum failed."
     -- }}}
+
+
+envelopeMessage :: Bool -> Message -> Envelope
+envelopeMessage testnet (Version info) =
+  -- {{{
+  Envelope
+    { envCommand = "version"
+    , envPayload = serialize info
+    , envTestnet = testnet
+    }
+  -- }}}
+envelopeMessage testnet (VerAck info) =
+  -- {{{
+  Envelope
+    { envCommand = serialize info
+    , envPayload = ""
+    , envTestnet = testnet
+    }
+  -- }}}
 -- }}}
 
 
@@ -69,6 +88,7 @@ instance Serializable Envelope where
 data Message
   = Version VersionMsgInfo
   | VerAck  VerAckMsgInfo
+  deriving (Eq, Show)
 
 
 -- VersionMsgInfo
@@ -85,7 +105,7 @@ data VersionMsgInfo = VersionMsgInfo
   , verSenderPort       :: Word16
   , verNonce            :: Word64
   , verUserAgent        :: ByteString
-  , verLatestBlock      :: Word64
+  , verLatestBlock      :: Word32
   , verRelay            :: Bool
   } deriving (Eq, Show)
 
@@ -97,10 +117,10 @@ instance Serializable VersionMsgInfo where
     <> serialize verTimestamp
     <> serialize verReceiverServices
     <> serialize verReceiverIP
-    <> serialize verReceiverPort
+    <> LBS.reverse (serialize verReceiverPort)
     <> serialize verSenderServices
     <> serialize verSenderIP
-    <> serialize verSenderPort
+    <> LBS.reverse (serialize verSenderPort)
     <> serialize verNonce
     <> serialize (Varint $ fromIntegral $ LBS.length verUserAgent)
     <> verUserAgent
@@ -143,7 +163,7 @@ makeVersionMsg mTS mNonce = do
       verSenderServices   = 0
       verSenderIP         = IPv4 0 0 0 0
       verSenderPort       = 8333
-      verUserAgent        = "programmingbitcoin:0.1"
+      verUserAgent        = "/programmingbitcoin:0.1/"
       verLatestBlock      = 0
       verRelay            = False
   return $ Version $ VersionMsgInfo {..}
@@ -153,7 +173,7 @@ makeVersionMsg mTS mNonce = do
 
 -- VerAckMsgInfo
 -- {{{
-data VerAckMsgInfo = VerAckMsgInfo
+data VerAckMsgInfo = VerAckMsgInfo deriving (Eq, Show)
 
 instance Serializable VerAckMsgInfo where
   serialize _ = "verack"

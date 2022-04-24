@@ -21,16 +21,18 @@ n  = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141
 -- | Prime of the field element that points on Bitcoin's
 --   curve use.
 p  :: Integer
-p  = 2 ^ 256 - 2 ^ 32 - 977
+-- p  = 2 ^ 256 - 2 ^ 32 - 977
+p  = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
 
 
 -- | Type alias of a field element with prime `p`.
-type S256Field = FE.FieldElement 115792089237316195423570985008687907853269984665640564039457584007908834671663
+type S256Field =
+  FE.FieldElement 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
 
 
 -- | Type alias for points on Bitcoin's elliptic curve.
 type S256Point =
-  FFEC.Point 115792089237316195423570985008687907853269984665640564039457584007908834671663
+  FFEC.Point 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
              0
              7
 

@@ -71,7 +71,6 @@ runLocalTest() { # Run the tests for the given exercise locally.
       # final="stack test --fast --test-arguments='--match \"$argument\"'"
       touch test.sh
       echo $final >> test.sh
-      # source test.sh
       sh test.sh
       rm test.sh
       ;;

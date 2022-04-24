@@ -32,14 +32,14 @@ instance Serializable Word8 where
   parser = P.anySingle
 
 instance Serializable Word16 where
-  serialize w16 = integralToNBytes 2 w16
+  serialize w16 = integralToNBytesLE 2 w16
   parser = fromIntegral . bsToInteger <$> P.takeP (Just "two bytes.") 2
 
 instance Serializable Word32 where
-  serialize w32 = integralToNBytes 4 w32
+  serialize w32 = integralToNBytesLE 4 w32
   parser = fromIntegral . bsToInteger <$> P.takeP (Just "four bytes.") 4
 
 instance Serializable Word64 where
-  serialize w64 = integralToNBytes 8 w64
+  serialize w64 = integralToNBytesLE 8 w64
   parser = fromIntegral . bsToInteger <$> P.takeP (Just "eight bytes.") 8
 -- }}}

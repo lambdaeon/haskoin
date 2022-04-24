@@ -18,7 +18,8 @@ import           Utils
 
 
 -- | From a public key point, to a Base58 encoded (with checksum)
---   p2sh address.
+--   p2sh address. The @Bool@ indicates whether the address is
+--   meant for testnet or not.
 hash160ToAddress :: Bool -> ByteString -> ByteString
 hash160ToAddress testnet h160 =
   -- {{{

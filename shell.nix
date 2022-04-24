@@ -7,7 +7,7 @@ let
   f = { mkDerivation, base, base16, binary, bytestring, conduit
       , conduit-extra, containers, cryptonite, groups, hpack, hspec
       , hspec-megaparsec, http-client, http-client-tls, http-conduit, lib
-      , megaparsec, memory, mtl, network, text, time, transformers
+      , megaparsec, memory, mtl, network, network-run, text, time, transformers
       }:
       mkDerivation {
         pname = "haskoin";
@@ -18,19 +18,19 @@ let
         libraryHaskellDepends = [
           base base16 binary bytestring conduit conduit-extra containers
           cryptonite groups http-client http-client-tls http-conduit
-          megaparsec memory mtl network text time transformers
+          megaparsec memory mtl network network-run text time transformers
         ];
         libraryToolDepends = [ hpack ];
         executableHaskellDepends = [
           base base16 binary bytestring conduit conduit-extra containers
           cryptonite groups hspec http-client http-client-tls http-conduit
-          megaparsec memory mtl network text time transformers
+          megaparsec memory mtl network network-run text time transformers
         ];
         testHaskellDepends = [
           base base16 binary bytestring conduit conduit-extra containers
           cryptonite groups hspec hspec-megaparsec http-client
-          http-client-tls http-conduit megaparsec memory mtl network text
-          time transformers
+          http-client-tls http-conduit megaparsec memory mtl network network-run
+          text time transformers
         ];
         prePatch = "hpack";
         homepage = "https://github.com/lambdaeon/haskoin#readme";
