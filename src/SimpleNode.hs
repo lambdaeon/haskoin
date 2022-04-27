@@ -4,7 +4,7 @@ module SimpleNode where
 import           Conduit
 import           Control.Concurrent             (threadDelay)
 import           Control.Exception
-import           Control.Monad                  (forever)
+import           Control.Monad                  (forever, unless)
 import qualified Data.ByteString                as BS
 import qualified Data.ByteString.Lazy           as LBS
 import qualified Data.ByteString.Lazy.Char8     as C
@@ -25,23 +25,143 @@ import           Utils
 
 
 
-run :: IO ()
-run = do
-  eithVerMsg <- runExceptT $ Network.makeVersionMsg Nothing Nothing
-  case eithVerMsg of
-    Right verMsg ->
-      -- runTCPClient "72.48.253.168" "18333" $ \s -> do
-      runTCPClient "testnet.programmingbitcoin.com" "18333" $ \s -> do
-        print "---------- 1"
-        sendAll s $ serialize $ Network.envelopeMessage True verMsg
-        print "---------- 2"
-        msg <- recv s 2048
-        print "---------- 3"
-        Socket.listen s 1
-        putStr "Received: "
-        C.putStrLn msg
-    Left err ->
-      fail $ show err
+-- | The provided server from the book doesn't seem to be performing
+--   properly, therefore I decided to spin up a rudimentary version
+--   of my own based on the procedure described in the book.
+--
+--   This action starts by listening to port 18333 (testnet) for
+--   a valid @version@ message. When it receives one, it sends back
+--   the enveloped @verack@ message first, and its own @version@
+--   message (it's better to wrap the two packets into an
+--   intermediate datatype).
+--
+--   At this point it blocks and keeps listening for client's @verack@
+--   message. The handshake completes when the envelope arrives.
+server :: IO ()
+server =
+  -- {{{
+  let
+    handshake s = do
+      -- {{{
+      msg <- recv s 1024
+      case parseVersion msg of
+        Right (Network.Version verInfo) -> do
+          -- {{{
+          putStrLn "Received a valid Version message."
+          putStrLn "Sending a VerAck message..."
+          sendVerAck s
+          putStrLn "Done."
+          putStrLn "Sending the Version message..."
+          sendVersion s
+          putStrLn "Done."
+          putStrLn "Waiting for a VerAck."
+          handshake s
+          -- }}}
+        Left _                          ->
+          -- {{{
+          case parseVerAck msg of
+            Right (Network.VerAck _) -> do
+              -- {{{
+              putStrLn "Received a valid VerAck message."
+              putStrLn "Handshake completed."
+              -- }}}
+            Left _                   ->
+              -- {{{
+              fail "invalid version packet."
+              -- }}}
+          -- }}}
+      -- }}}
+  in do
+  putStrLn "\n\n~~~~ Bitcoin Node Server running on port 18333 ~~~~\n"
+  runTCPServer Nothing "18333" handshake
+  -- }}}
 
+
+-- | The `client` action performs the handshake as
+--   described in the book:
+--   
+--   (1) Starts by sending its enveloped @version@ message.
+--   
+--   2.  Waits to receive two packets: first a @verack@ message,
+--       and next, server's @version@ message.
+--
+--   3.  In case of a successful parse of the envelopes, it sends
+--       a @verack@ message to complete the handshake.
+client :: IO ()
+client = do
+  -- {{{
+  -- runTCPClient "72.48.253.168" "18333" $ \s -> do
+  -- runTCPClient "testnet.programmingbitcoin.com" "18333" $ \s -> do
+  runTCPClient "127.0.0.1" "18333" $ \s -> do
+    putStrLn "Sending the Version message..."
+    sendVersion s
+    putStrLn "Done."
+    putStrLn "Waiting for a VerAck message..."
+    verAckRes  <- recv s 1024
+    putStr "First packet received: "
+    print $ encodeHex verAckRes
+    putStrLn "Waiting for a Version message..."
+    versionRes <- recv s 1024
+    putStr "Second packet received: "
+    print $ encodeHex versionRes
+    case (parseVerAck verAckRes, parseVersion versionRes) of
+      (Right (Network.VerAck _), Right (Network.Version verInfo)) -> do
+        -- {{{
+        putStrLn "Received valid packets."
+        putStrLn "Sending the VerAck message..."
+        sendVerAck s
+        putStrLn "Done."
+        -- }}}
+      _ ->
+        -- {{{
+        fail "invalid response for handshake."
+        -- }}}
+  -- }}}
+
+
+-- ** Utils
+-- {{{
+-- | Helper function to generate, envelope and send 
+--   a @version@ message through its given socket.
+sendVersion :: Socket -> IO ()
+sendVersion s = do
+  -- {{{
+  verMsg <- Network.makeVersionMsg Nothing Nothing
+  let bs = serialize $ Network.envelopeMessage True verMsg
+  putStr "Sending: "
+  print $ encodeHex bs
+  sendAll s bs
+  -- }}}
+
+
+-- | Helper function to envelope and send the minimal
+--   @verack@ message.
+sendVerAck :: Socket -> IO ()
+sendVerAck s = do
+  -- {{{
+  let bs = Network.VerAck Network.VerAckMsgInfo
+           & Network.envelopeMessage True
+           & serialize
+  putStr "Sending: "
+  print $ encodeHex bs
+  sendAll s bs
+  -- }}}
+
+
+-- | Helper function.
+parseVersion :: ByteString -> ParseResult Network.Message
+parseVersion msg =
+  -- {{{
+  Network.Version <$> P.runParser parser "" msg
+  -- }}}
+
+
+-- | Helper function.
+parseVerAck :: ByteString -> ParseResult Network.Message
+parseVerAck msg =
+  -- {{{
+  Network.VerAck <$> P.runParser parser "" msg
+  -- }}}
+-- }}}
 
 

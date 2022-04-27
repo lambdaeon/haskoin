@@ -13,8 +13,10 @@ import qualified Text.Megaparsec.Byte        as BP
 import           Utils
 
 
--- ENVELOPE
+-- ** Envelope
 -- {{{
+-- | Recode type to represent the envelope that contains the
+--   actual payload.
 data Envelope = Envelope
   { envCommand :: ByteString
   , envPayload :: ByteString
@@ -44,6 +46,7 @@ instance Serializable Envelope where
     -- {{{
        (if envTestnet then testnetNetworkMagic else mainnetNetworkMagic)
     <> envCommand
+    <> LBS.replicate (fromIntegral $ 12 - LBS.length envCommand) 0x00
     <> integralToNBytesLE 4 (LBS.length envPayload)
     <> LBS.take 4 (hash256 envPayload)
     <> envPayload
@@ -63,6 +66,8 @@ instance Serializable Envelope where
     -- }}}
 
 
+-- | Smart constructor of `Evelope` values based on the given
+--   `Message` data constructor.
 envelopeMessage :: Bool -> Message -> Envelope
 envelopeMessage testnet (Version info) =
   -- {{{
@@ -75,16 +80,18 @@ envelopeMessage testnet (Version info) =
 envelopeMessage testnet (VerAck info) =
   -- {{{
   Envelope
-    { envCommand = serialize info
-    , envPayload = ""
+    { envCommand = "verack"
+    , envPayload = serialize info
     , envTestnet = testnet
     }
   -- }}}
 -- }}}
 
 
--- MESSAGE
+-- ** Message
 -- {{{
+-- | Sum type to allow a more concise representation of
+--   various messages.
 data Message
   = Version VersionMsgInfo
   | VerAck  VerAckMsgInfo
@@ -146,7 +153,11 @@ instance Serializable VersionMsgInfo where
     return $ VersionMsgInfo {..}
     -- }}}
 
-makeVersionMsg :: Maybe Word64 -> Maybe Word64 -> ExceptT Text IO Message
+
+-- | Function for generating a `Version` message with many of its
+--   fields set to certain default values (many of which are probably
+--   not quite correct).
+makeVersionMsg :: Maybe Word64 -> Maybe Word64 -> IO Message
 makeVersionMsg mTS mNonce = do
   -- {{{
   verTimestamp <- case mTS of
@@ -173,14 +184,19 @@ makeVersionMsg mTS mNonce = do
 
 -- VerAckMsgInfo
 -- {{{
+-- | A minimal datatype to represent a @verack@ message.
 data VerAckMsgInfo = VerAckMsgInfo deriving (Eq, Show)
 
 instance Serializable VerAckMsgInfo where
-  serialize _ = "verack"
-  parser      = VerAckMsgInfo <$ BP.string "verack"
+  serialize _ = LBS.empty
+  parser      = return VerAckMsgInfo
 -- }}}
 
 
+-- | With the current architecture of `Serializable` typeclass,
+--   implementing a `parser` for the `Message` datatype seems a bit
+--   of a hassle. To help accelerate the progress, I've implemented
+--   its serialization function seprarately here.
 serializeMessage :: Message -> ByteString
 serializeMessage (Version verMsgInfo) = serialize verMsgInfo
 serializeMessage (VerAck  verAckInfo) = serialize verAckInfo

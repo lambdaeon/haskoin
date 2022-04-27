@@ -85,7 +85,7 @@ library
     , transformers
   default-language: Haskell2010
 
-executable haskoin-exe
+executable haskoin-server
   main-is: Main.hs
   other-modules:
       Paths_haskoin
