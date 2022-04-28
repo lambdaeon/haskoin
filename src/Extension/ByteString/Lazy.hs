@@ -5,12 +5,14 @@ module Extension.ByteString.Lazy
   , safeLast
   , safeInit
   , dropEnd
+  , appendZerosUntil
   ) where
 
 
 import Data.ByteString.Lazy as LBS
 import Data.Memory.Endian      (getSystemEndianness, Endianness (..))
 import Data.Word               (Word8)
+import GHC.Int                 (Int64)
 
 
 
@@ -96,7 +98,12 @@ dropEnd i' bs =
     Just $ LBS.take (len - i) bs
 
 
-
+-- | Zero padding to the right until the given `ByteString`
+--   reaches the desired length. Doesn't do anything if the
+--   given `ByteString` is longer.
+appendZerosUntil :: Int64 -> ByteString -> ByteString
+appendZerosUntil maxLen bs =
+  bs <> LBS.replicate (maxLen - LBS.length bs) 0x00
 
 
 

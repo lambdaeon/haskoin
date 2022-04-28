@@ -6,6 +6,7 @@ import           Data.Varint                 (Varint (..))
 import qualified Data.Varint                 as Varint
 import           Data.Serializable
 import           Extension.ByteString.Parser
+import qualified Extension.ByteString.Lazy   as LBS
 import           Network.Common
 import           Text.Megaparsec             ((<|>))
 import qualified Text.Megaparsec             as P
@@ -45,8 +46,7 @@ instance Serializable Envelope where
   serialize Envelope {..} =
     -- {{{
        (if envTestnet then testnetNetworkMagic else mainnetNetworkMagic)
-    <> envCommand
-    <> LBS.replicate (fromIntegral $ 12 - LBS.length envCommand) 0x00
+    <> LBS.appendZerosUntil 12 envCommand
     <> integralToNBytesLE 4 (LBS.length envPayload)
     <> LBS.take 4 (hash256 envPayload)
     <> envPayload
@@ -85,6 +85,14 @@ envelopeMessage testnet (VerAck info) =
     , envTestnet = testnet
     }
   -- }}}
+envelopeMessage testnet (GetHeaders info) =
+  -- {{{
+  Envelope
+    { envCommand = "getheaders"
+    , envPayload = serialize info
+    , envTestnet = testnet
+    }
+  -- }}}
 -- }}}
 
 
@@ -93,8 +101,9 @@ envelopeMessage testnet (VerAck info) =
 -- | Sum type to allow a more concise representation of
 --   various messages.
 data Message
-  = Version VersionMsgInfo
-  | VerAck  VerAckMsgInfo
+  = Version    VersionMsgInfo
+  | VerAck     VerAckMsgInfo
+  | GetHeaders GetHeadersMsgInfo
   deriving (Eq, Show)
 
 
@@ -193,13 +202,47 @@ instance Serializable VerAckMsgInfo where
 -- }}}
 
 
+-- GetHeadersMsgInfo
+-- {{{
+data GetHeadersMsgInfo = GetHeadersMsgInfo
+  { ghVersion       :: Word32
+  , ghNumHashes     :: Varint
+  , ghStartingBlock :: ByteString
+  , ghEndingBlock   :: ByteString
+  } deriving (Eq, Show)
+
+instance Serializable GetHeadersMsgInfo where
+  serialize GetHeadersMsgInfo {..} =
+    -- {{{
+       serialize ghVersion
+    <> serialize ghNumHashes
+    <> LBS.appendZerosUntil 32 ghStartingBlock
+    <> ( if LBS.null ghEndingBlock then
+           LBS.appendZerosUntil 32 LBS.empty
+         else
+           LBS.appendZerosUntil 32 ghEndingBlock
+       )
+    -- }}}
+  parser = do
+    -- {{{
+    ghVersion       <- parser
+    ghNumHashes     <- parser
+    ghStartingBlock <- P.takeP (Just "GetHeaders starting block.") 32
+    ghEndingBlock   <- P.takeP (Just "GetHeaders ending block.")   32
+    return $ GetHeadersMsgInfo {..}
+    -- }}}
+-- }}}
+
+
+
 -- | With the current architecture of `Serializable` typeclass,
 --   implementing a `parser` for the `Message` datatype seems a bit
 --   of a hassle. To help accelerate the progress, I've implemented
 --   its serialization function seprarately here.
 serializeMessage :: Message -> ByteString
-serializeMessage (Version verMsgInfo) = serialize verMsgInfo
-serializeMessage (VerAck  verAckInfo) = serialize verAckInfo
+serializeMessage (Version    verMsgInfo) = serialize verMsgInfo
+serializeMessage (VerAck     verAckInfo) = serialize verAckInfo
+serializeMessage (GetHeaders ghInfo    ) = serialize ghInfo
 -- }}}
 
 
