@@ -10,6 +10,8 @@ module BlockHead
   , sampleBS
   , no471744
   , no473759
+  , genesisBlock
+  , testnetGenesisBlock
   ) where
 
 
@@ -120,6 +122,15 @@ findNewBits start end =
   in
   BlockBits.fromTarget newTarget
   -- }}}
+
+
+eithGenesisBlock :: ParseResult BlockHead
+eithGenesisBlock = parse $ integerToBS 0x0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a29ab5f49ffff001d1dac2b7c
+Right genesisBlock = eithGenesisBlock
+
+eithTestnetGenesisBlock :: ParseResult BlockHead
+eithTestnetGenesisBlock = parse $ integerToBS 0x0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4adae5494dffff001d1aa4ae18
+Right testnetGenesisBlock = eithTestnetGenesisBlock
 
 
 -- SAMPLE VALUE

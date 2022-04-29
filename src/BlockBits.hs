@@ -90,4 +90,13 @@ fromByteString bs =
   -- }}}
 
 
+lowestBits :: BlockBits
+lowestBits = BlockBits
+  { bbExp       = 0x1d
+  , bbLeftByte  = 0xff
+  , bbMidByte   = 0xff
+  , bbRightByte = 0x00
+  }
+
+
 

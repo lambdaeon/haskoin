@@ -1444,7 +1444,7 @@ validateAndParseRedeemScript h160 redeemScriptBS =
     in
     mapLeft
       (const "redeemscript parse failed.")
-      (P.runParser parser "" rsBS)
+      (parse rsBS)
     -- }}}
   else
     -- {{{
@@ -1499,7 +1499,7 @@ signatureFromSIGHASHALLDER :: ByteString -> Either Text ECC.Signature
 signatureFromSIGHASHALLDER initDER = do
   -- {{{
   derBS     <- explainMaybe "invalid der." $ LBS.safeInit initDER
-  P.runParser parser "" derBS 
+  parse derBS 
     & mapLeft (const "failed to parse der formatted signature.")
   -- }}}
 -- }}}

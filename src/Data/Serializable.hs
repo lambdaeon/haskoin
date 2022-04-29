@@ -14,6 +14,9 @@ import           Utils
 class Serializable a where
   serialize :: a -> ByteString
   parser    :: Parser a
+  --
+  parse     :: ByteString -> ParseResult a
+  parse      = P.runParser parser ""
 -- }}}
 
 

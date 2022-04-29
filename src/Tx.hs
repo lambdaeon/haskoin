@@ -247,7 +247,7 @@ fetch testnet txId =
   resBS    <-   getResponseBody response
               & decodeHex
               & except
-  P.runParser parser "" resBS
+  parse resBS
     & fmap refineTx
     & except
     & withExceptT (const "failed to parse fetched tx.")

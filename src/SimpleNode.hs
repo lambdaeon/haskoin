@@ -91,7 +91,7 @@ client :: IO ()
 client = do
   -- {{{
   -- runTCPClient "72.48.253.168" "18333" $ \s -> do
-  -- runTCPClient "testnet.programmingbitcoin.com" "18333" $ \s -> do
+  -- runTCPClient "mainnet.programmingbitcoin.com" "8333" $ \s -> do
   runTCPClient "127.0.0.1" "18333" $ \s -> do
     putStrLn "Sending the Version message..."
     sendVersion s
@@ -152,7 +152,7 @@ sendVerAck s = do
 parseVersion :: ByteString -> ParseResult Network.Message
 parseVersion msg =
   -- {{{
-  Network.Version <$> P.runParser parser "" msg
+  Network.Version <$> parse msg
   -- }}}
 
 
@@ -160,7 +160,7 @@ parseVersion msg =
 parseVerAck :: ByteString -> ParseResult Network.Message
 parseVerAck msg =
   -- {{{
-  Network.VerAck <$> P.runParser parser "" msg
+  Network.VerAck <$> parse msg
   -- }}}
 -- }}}
 

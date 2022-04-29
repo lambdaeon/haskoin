@@ -1,6 +1,8 @@
 module Network where
 
 
+import           BlockHead                   (BlockHead)
+import           Control.Monad               (replicateM)
 import qualified Data.ByteString.Lazy        as LBS
 import           Data.Varint                 (Varint (..))
 import qualified Data.Varint                 as Varint
@@ -93,6 +95,14 @@ envelopeMessage testnet (GetHeaders info) =
     , envTestnet = testnet
     }
   -- }}}
+envelopeMessage testnet (Headers info) =
+  -- {{{
+  Envelope
+    { envCommand = "headers"
+    , envPayload = serialize info
+    , envTestnet = testnet
+    }
+  -- }}}
 -- }}}
 
 
@@ -104,6 +114,7 @@ data Message
   = Version    VersionMsgInfo
   | VerAck     VerAckMsgInfo
   | GetHeaders GetHeadersMsgInfo
+  | Headers    HeadersMsgInfo
   deriving (Eq, Show)
 
 
@@ -234,6 +245,38 @@ instance Serializable GetHeadersMsgInfo where
 -- }}}
 
 
+-- HeadersMsgInfo
+-- {{{
+data HeadersMsgInfo = HeadersMsgInfo
+  { hBlocks :: [BlockHead]
+  } deriving (Eq, Show)
+
+instance Serializable HeadersMsgInfo where
+  serialize HeadersMsgInfo {..} =
+    -- {{{
+    let
+      varintCount = Varint $ fromIntegral $ length hBlocks
+      foldFn bh acc = acc <> (serialize bh) `LBS.snoc` 0x00
+    in
+       serialize varintCount
+    <> foldr foldFn LBS.empty hBlocks
+    -- }}}
+  parser =
+    -- {{{
+    let
+      customParser :: Parser BlockHead
+      customParser = do
+        block <- parser
+        P.anySingle
+        return block
+    in do
+    blocksCount <- Varint.countParser
+    hBlocks     <- replicateM blocksCount customParser
+    return $ HeadersMsgInfo {..}
+    -- }}}
+-- }}}
+
+
 
 -- | With the current architecture of `Serializable` typeclass,
 --   implementing a `parser` for the `Message` datatype seems a bit
@@ -243,6 +286,7 @@ serializeMessage :: Message -> ByteString
 serializeMessage (Version    verMsgInfo) = serialize verMsgInfo
 serializeMessage (VerAck     verAckInfo) = serialize verAckInfo
 serializeMessage (GetHeaders ghInfo    ) = serialize ghInfo
+serializeMessage (Headers    hInfo     ) = serialize hInfo
 -- }}}
 
 

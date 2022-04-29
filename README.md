@@ -46,3 +46,41 @@ src
 
 5 directories, 25 files
 ```
+
+## Library Directory Structure
+
+```
+src
+├── BlockBits.hs
+├── BlockHead.hs
+├── Data
+│   ├── Serializable.hs
+│   └── Varint.hs
+├── ECC.hs
+├── Extension
+│   ├── ByteString
+│   │   ├── Lazy.hs
+│   │   └── Parser.hs
+│   ├── ByteString.hs
+│   └── List.hs
+├── FieldElement.hs
+├── FiniteFieldEllipticCurve.hs
+├── Locktime.hs
+├── Network
+│   └── Common.hs
+├── Network.hs
+├── Script
+│   ├── PayToPubKeyHash.hs
+│   └── PayToScriptHash.hs
+├── Script.hs
+├── SECP256K1.hs
+├── SimpleNode.hs
+├── TestnetWalletPassPhrase.hs
+├── TestnetWalletPassPhrase.hs.DUMMY
+├── Tx.hs
+├── TxIn.hs
+├── TxOut.hs
+└── Utils.hs
+
+5 directories, 25 files
+```
