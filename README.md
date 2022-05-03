@@ -13,8 +13,9 @@ The easiest way is to use `nix`.
 
 ```
 src
-├── BlockBits.hs
-├── BlockHead.hs
+├── Block
+│   └── Merkle.hs
+├── Block.hs
 ├── Data
 │   ├── Serializable.hs
 │   └── Varint.hs
@@ -44,5 +45,5 @@ src
 ├── TxOut.hs
 └── Utils.hs
 
-5 directories, 25 files
+6 directories, 25 files
 ```

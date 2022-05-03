@@ -42,6 +42,9 @@ module Utils
   , ripemd160
   , hash160
   , hash256
+  , word8ToBools
+  , boolsToWord8
+  , splitIn
   , indexedMap
   , indexedMapM
   , foldM
@@ -624,6 +627,38 @@ hash256 =
   -- {{{
   LBS.fromStrict . BA.convert . hashWith SHA256 . hashWith SHA256 . LBS.toStrict
   -- }}}
+
+
+-- | Converts a `Word8` into a list of `Bool` values, each representing a bit.
+--   Least significant bit will sit at list's head.
+word8ToBools :: Word8 -> [Bool]
+word8ToBools w8 = 
+  -- {{{
+  map (testBit w8) [0..7]
+  -- }}}
+
+
+-- | Converts a list of `Bool` values (representing bits) to a byte.
+--   Lists with less elements than 8 are "0-padded" to right, while
+--   only the first 8 elements of bigger lists are considered..
+boolsToWord8 :: [Bool] -> Word8
+boolsToWord8 [] = 0
+boolsToWord8 xs =
+  -- {{{
+  foldl setBit 0 (map snd $ filter fst $ zip xs [0..7])
+  -- }}}
+
+
+-- | Splits a list into chunks of `Int` length. Last chunk may be smaller.
+splitIn :: Int -> [a] -> [[a]]
+splitIn _ [] = []
+splitIn c xs =
+  -- {{{
+  let
+    (xs1, xs2) = splitAt c xs
+  in
+  xs1 : splitIn c xs2
+  -- }}} 
 
 
 -- | Similar to `map`, but the mapping function also requires

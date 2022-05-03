@@ -25,8 +25,8 @@ source-repository head
 
 library
   exposed-modules:
-      BlockBits
-      BlockHead
+      Block
+      Block.Merkle
       Data.Serializable
       Data.Varint
       ECC
@@ -140,7 +140,7 @@ test-suite haskoin-test
       TupleSections
       NumericUnderscores
       FlexibleInstances
-  ghc-options: -threaded -rtsopts -with-rtsopts=-N -Weverything
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
     , base16

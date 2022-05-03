@@ -1,7 +1,8 @@
 module Network where
 
 
-import           BlockHead                   (BlockHead)
+import qualified Block
+import qualified Block.Merkle                as Merkle
 import           Control.Monad               (replicateM)
 import qualified Data.ByteString.Lazy        as LBS
 import           Data.Varint                 (Varint (..))
@@ -13,6 +14,7 @@ import           Network.Common
 import           Text.Megaparsec             ((<|>))
 import qualified Text.Megaparsec             as P
 import qualified Text.Megaparsec.Byte        as BP
+import qualified Text.Megaparsec.Debug       as P
 import           Utils
 
 
@@ -103,18 +105,32 @@ envelopeMessage testnet (Headers info) =
     , envTestnet = testnet
     }
   -- }}}
+envelopeMessage testnet (MerkleBlock info) =
+  -- {{{
+  Envelope
+    { envCommand = "merkleblock"
+    , envPayload = serialize info
+    , envTestnet = testnet
+    }
+  -- }}}
 -- }}}
 
 
 -- ** Message
 -- {{{
+-- | Common protocol version value.
+defaultProtocolVersion :: Word32
+defaultProtocolVersion = 70015
+
+
 -- | Sum type to allow a more concise representation of
 --   various messages.
 data Message
-  = Version    VersionMsgInfo
-  | VerAck     VerAckMsgInfo
-  | GetHeaders GetHeadersMsgInfo
-  | Headers    HeadersMsgInfo
+  = Version     VersionMsgInfo
+  | VerAck      VerAckMsgInfo
+  | GetHeaders  GetHeadersMsgInfo
+  | Headers     HeadersMsgInfo
+  | MerkleBlock MerkleBlockMsgInfo
   deriving (Eq, Show)
 
 
@@ -173,7 +189,6 @@ instance Serializable VersionMsgInfo where
     return $ VersionMsgInfo {..}
     -- }}}
 
-
 -- | Function for generating a `Version` message with many of its
 --   fields set to certain default values (many of which are probably
 --   not quite correct).
@@ -186,7 +201,7 @@ makeVersionMsg mTS mNonce = do
   verNonce     <- case mNonce of
                     Just nonce -> return nonce
                     Nothing    -> liftIO $ getNByteNonce 8
-  let verProtocolVersion  = 70015
+  let verProtocolVersion  = defaultProtocolVersion
       verServices         = 0
       verReceiverServices = 0
       verReceiverIP       = IPv4 0 0 0 0
@@ -242,13 +257,27 @@ instance Serializable GetHeadersMsgInfo where
     ghEndingBlock   <- P.takeP (Just "GetHeaders ending block.")   32
     return $ GetHeadersMsgInfo {..}
     -- }}}
+
+
+-- | A message for requesting all possible
+--   block heads since the genesis block.
+getAllHeadersMsg :: Message
+getAllHeadersMsg =
+  -- {{{
+  GetHeaders $ GetHeadersMsgInfo
+    { ghVersion       = defaultProtocolVersion
+    , ghNumHashes     = Varint 1
+    , ghStartingBlock = Block.getHash $ Block.getId Block.genesisBlock
+    , ghEndingBlock   = LBS.empty
+    }
+  -- }}}
 -- }}}
 
 
 -- HeadersMsgInfo
 -- {{{
-data HeadersMsgInfo = HeadersMsgInfo
-  { hBlocks :: [BlockHead]
+newtype HeadersMsgInfo = HeadersMsgInfo
+  { hBlocks :: [Block.Header]
   } deriving (Eq, Show)
 
 instance Serializable HeadersMsgInfo where
@@ -256,7 +285,7 @@ instance Serializable HeadersMsgInfo where
     -- {{{
     let
       varintCount = Varint $ fromIntegral $ length hBlocks
-      foldFn bh acc = acc <> (serialize bh) `LBS.snoc` 0x00
+      foldFn bh acc = acc <> serialize bh `LBS.snoc` 0x00
     in
        serialize varintCount
     <> foldr foldFn LBS.empty hBlocks
@@ -264,7 +293,7 @@ instance Serializable HeadersMsgInfo where
   parser =
     -- {{{
     let
-      customParser :: Parser BlockHead
+      customParser :: Parser Block.Header
       customParser = do
         block <- parser
         P.anySingle
@@ -277,16 +306,44 @@ instance Serializable HeadersMsgInfo where
 -- }}}
 
 
+-- MerkleBlockMsgInfo
+data MerkleBlockMsgInfo = MerkleBlockMsgInfo
+  { mbHeader   :: Block.Header
+  , mbNumTxs   :: Word32
+  , mbHashes   :: [ByteString]
+  , mbFlagBits :: Merkle.FlagBits
+  } deriving (Eq, Show)
+
+instance Serializable MerkleBlockMsgInfo where
+  serialize MerkleBlockMsgInfo {..} =
+    -- {{{
+       serialize mbHeader
+    <> serialize mbNumTxs
+    <> serialize (Varint $ fromIntegral $ length mbHashes)
+    <> LBS.concat mbHashes
+    <> serialize mbFlagBits
+    -- }}}
+  parser = do
+    -- {{{
+    mbHeader   <- parser
+    mbNumTxs   <- parser
+    numHashes  <- Varint.countParser
+    mbHashes   <- replicateM numHashes $ P.takeP (Just "tx hash") 32
+    mbFlagBits <- parser
+    return $ MerkleBlockMsgInfo {..}
+    -- }}}
+
 
 -- | With the current architecture of `Serializable` typeclass,
 --   implementing a `parser` for the `Message` datatype seems a bit
 --   of a hassle. To help accelerate the progress, I've implemented
 --   its serialization function seprarately here.
 serializeMessage :: Message -> ByteString
-serializeMessage (Version    verMsgInfo) = serialize verMsgInfo
-serializeMessage (VerAck     verAckInfo) = serialize verAckInfo
-serializeMessage (GetHeaders ghInfo    ) = serialize ghInfo
-serializeMessage (Headers    hInfo     ) = serialize hInfo
+serializeMessage (Version     verMsgInfo) = serialize verMsgInfo
+serializeMessage (VerAck      verAckInfo) = serialize verAckInfo
+serializeMessage (GetHeaders  ghInfo    ) = serialize ghInfo
+serializeMessage (Headers     hInfo     ) = serialize hInfo
+serializeMessage (MerkleBlock mbInfo    ) = serialize mbInfo
 -- }}}
 
 

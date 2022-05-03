@@ -1,8 +1,8 @@
 module Main where
 
 
-import qualified BlockHead                   as BH
-import qualified BlockBits
+import qualified Block
+import qualified Block.Merkle                as Merkle
 import           Debug.Trace                 (trace)
 import qualified Data.ByteString.Lazy        as LBS
 import           Data.Either                 (isRight)
@@ -484,12 +484,12 @@ main = do
 
     describe "\nChapter 9 - Exercise 3" $ do
       -- {{{
-      let parseRes :: ParseResult BH.BlockHead
-          parseRes = P.runParser parser "" BH.sampleBS
-          parseRes471744 :: ParseResult BH.BlockHead
-          parseRes471744 = P.runParser parser "" BH.no471744
-          parseRes473759 :: ParseResult BH.BlockHead
-          parseRes473759 = P.runParser parser "" BH.no473759
+      let parseRes :: ParseResult Block.Header
+          parseRes = P.runParser parser "" Block.sampleHeaderBS
+          parseRes471744 :: ParseResult Block.Header
+          parseRes471744 = P.runParser parser "" Block.no471744
+          parseRes473759 :: ParseResult Block.Header
+          parseRes473759 = P.runParser parser "" Block.no473759
       it "Successfully parsed a sample block." $ do
         (isRight parseRes) `shouldBe` True
       it "Successfully parsed block#471744." $ do
@@ -500,27 +500,27 @@ main = do
 
     describe "\nChapter 9 - Exercise 5" $ do
       -- {{{
-      let parseRes :: ParseResult BH.BlockHead
-          parseRes = P.runParser parser "" BH.sampleBS
+      let parseRes :: ParseResult Block.Header
+          parseRes = P.runParser parser "" Block.sampleHeaderBS
           ans = 0x0000000000000000007e9e4c586439b0cdbe13b1370bdd9435d76a644d047523
       it "Successfully found the ID of a sample block." $ do
-        ((bsToIntegerLE . BH.getId) <$> parseRes) `shouldBe` (Right ans)
+        ((bsToIntegerLE . Block.getHash . Block.getId) <$> parseRes) `shouldBe` (Right ans)
       -- }}}
 
     describe "\nChapter 9 - Exercise 9" $ do
       -- {{{
-      let mBlockBits = BlockBits.fromByteString $ integerToBS 0xe93c0118
+      let mBlockBits = Block.bitsFromByteString $ integerToBS 0xe93c0118
       it "Successfully found the target value from a sample BlockBits." $ do
         shouldBe
-          (BlockBits.toTarget <$> mBlockBits)
+          (Block.bitsToTarget <$> mBlockBits)
           (Right 0x13ce9000000000000000000000000000000000000000000)
       -- }}}
 
     describe "\nChapter 9 - Exercise 10" $ do
       -- {{{
-      let parseRes :: ParseResult BH.BlockHead
-          parseRes = P.runParser parser "" BH.sampleBS
-          eithDiff = BH.difficulty <$> parseRes
+      let parseRes :: ParseResult Block.Header
+          parseRes = P.runParser parser "" Block.sampleHeaderBS
+          eithDiff = Block.difficulty <$> parseRes
           compFn x = x == 888171856257.3206
       it "Difficulty of the given sample computed successfully." $ do
         (compFn <$> (myTrace "\nDIFFICULTY VALUE: " eithDiff)) `shouldBe` (Right True)
@@ -528,18 +528,18 @@ main = do
 
     describe "\nChapter 9 - Exercise 11" $ do
       -- {{{
-      let parseRes :: ParseResult BH.BlockHead
-          parseRes = P.runParser parser "" BH.sampleBS
-          parseRes471744 :: ParseResult BH.BlockHead
-          parseRes471744 = P.runParser parser "" BH.no471744
-          parseRes473759 :: ParseResult BH.BlockHead
-          parseRes473759 = P.runParser parser "" BH.no473759
+      let parseRes :: ParseResult Block.Header
+          parseRes = P.runParser parser "" Block.sampleHeaderBS
+          parseRes471744 :: ParseResult Block.Header
+          parseRes471744 = P.runParser parser "" Block.no471744
+          parseRes473759 :: ParseResult Block.Header
+          parseRes473759 = P.runParser parser "" Block.no473759
       it "Block proof-of-work confirmation succeeded for a sample." $ do
-        (BH.confirm <$> parseRes) `shouldBe` (Right True)
+        (Block.confirm <$> parseRes) `shouldBe` (Right True)
       it "Block proof-of-work confirmation succeeded for block#471744." $ do
-        (BH.confirm <$> parseRes471744) `shouldBe` (Right True)
+        (Block.confirm <$> parseRes471744) `shouldBe` (Right True)
       it "Block proof-of-work confirmation succeeded for block#473759." $ do
-        (BH.confirm <$> parseRes473759) `shouldBe` (Right True)
+        (Block.confirm <$> parseRes473759) `shouldBe` (Right True)
       -- }}}
 
     describe "\nChapter 9 - Exercise 12" $ do
@@ -547,23 +547,23 @@ main = do
       let parseRes471744 =
             mapLeft
               (const "block 471744 parse failed.") 
-              (P.runParser parser "" BH.no471744)
+              (P.runParser parser "" Block.no471744)
           parseRes473759 =
             mapLeft
               (const "block 473759 parse failed.")
-              (P.runParser parser "" BH.no473759)
+              (P.runParser parser "" Block.no473759)
           newBits = do
             bEnd   <- parseRes471744 -- The order of these two seems misplace,
             bStart <- parseRes473759 -- but this is how the books does it.
-            BH.findNewBits bStart bEnd
+            Block.findNewBits bStart bEnd
       it "New bits from block#471744 and block#473759 found successfully." $ do
         shouldBe
           newBits
-          ( Right $ BlockBits.BlockBits
-              { BlockBits.bbExp       = 0x17
-              , BlockBits.bbLeftByte  = 0x80
-              , BlockBits.bbMidByte   = 0xdf
-              , BlockBits.bbRightByte = 0x62
+          ( Right $ Block.Bits
+              { Block.bitsExp       = 0x17
+              , Block.bitsLeftByte  = 0x80
+              , Block.bitsMidByte   = 0xdf
+              , Block.bitsRightByte = 0x62
               }
           )
       -- }}}
@@ -574,6 +574,81 @@ main = do
           parseRes = P.runParser parser "" Network.sampleEnvelopeBS
       it "Successfully parsed a sample NetworkEnvelope value." $ do
         (isRight (myTrace "\nNETWORK ENVELOPE PARSE RESULT: " parseRes)) `shouldBe` True
+      -- }}}
+
+    describe "\nChapter 11 - Exercise 1" $ do
+      -- {{{
+      let bs0 = Merkle.sampleBS01
+          bs1 = Merkle.sampleBS02
+      it "Merkle parent of the given two bytestrings computed successfully." $ do
+        (Merkle.parent bs0 bs1) `shouldBe` (integerToBS 0x8b30c5ba100f6f2e5ad1e2a742e5020491240f8eb514fe97c713c31718ad7ecd)
+      -- }}}
+
+    describe "\nChapter 11 - Exercise 2" $ do
+      -- {{{
+      let input =
+            [ Merkle.sampleBS01
+            , Merkle.sampleBS02
+            , Merkle.sampleBS03
+            , Merkle.sampleBS04
+            , Merkle.sampleBS05
+            ]
+          ans =
+            [ integerToBS 0x8b30c5ba100f6f2e5ad1e2a742e5020491240f8eb514fe97c713c31718ad7ecd
+            , integerToBS 0x7f4e6f9e224e20fda0ae4c44114237f97cd35aca38d83081c9bfd41feb907800
+            , integerToBS 0x3ecf6115380c77e8aae56660f5634982ee897351ba906a6837d15ebc3a225df0
+            ]
+      it "Merkle parent level of given hashes found successfully." $ do
+        (Merkle.hashOneLevel input) `shouldBe` ans
+      -- }}}
+
+    describe "\nChapter 11 - Exercise 3" $ do
+      -- {{{
+      let input =
+            [ Merkle.sampleBS01
+            , Merkle.sampleBS02
+            , Merkle.sampleBS03
+            , Merkle.sampleBS04
+            , Merkle.sampleBS05
+            , Merkle.sampleBS06
+            , Merkle.sampleBS07
+            , Merkle.sampleBS08
+            , Merkle.sampleBS09
+            , Merkle.sampleBS10
+            , Merkle.sampleBS11
+            , Merkle.sampleBS12
+            ] & map LBS.reverse
+          ans = Merkle.Root $ LBS.reverse $ integerToBS 0xacbcab8bcc1af95d8d563b77d24c3d19b18f1486383d75a5085c4e86c86beed6
+      it "Merkle root of given hashes found successfully." $ do
+        (Merkle.findRoot input) `shouldBe` ans
+      -- }}}
+
+    describe "\nChapter 11 - Exercise 4" $ do
+      -- {{{
+      let input =
+            [ integerToBS 0x42f6f52f17620653dcc909e58bb352e0bd4bd1381e2955d19c00959a22122b2e
+            , integerToBS 0x94c3af34b9667bf787e1c6a0a009201589755d01d02fe2877cc69b929d2418d4
+            , integerToBS 0x959428d7c48113cb9149d0566bde3d46e98cf028053c522b8fa8f735241aa953
+            , integerToBS 0xa9f27b99d5d108dede755710d4a1ffa2c74af70b4ca71726fa57d68454e609a2
+            , integerToBS 0x62af110031e29de1efcad103b3ad4bec7bdcf6cb9c9f4afdd586981795516577
+            , integerToBS 0x766900590ece194667e9da2984018057512887110bf54fe0aa800157aec796ba
+            , integerToBS 0xe8270fb475763bc8d855cfe45ed98060988c1bdcad2ffc8364f783c98999a208
+            ]
+          ans = Merkle.Root $ integerToBS 0x654d6181e18e4ac4368383fdc5eead11bf138f9b7ac1e15334e4411b3c4797d9
+      it "Merkle root of given hashes found successfully." $ do
+        (Merkle.findRoot input) `shouldBe` ans
+      -- }}}
+
+    describe "\nChapter 11 - Exercise 6" $ do
+      -- {{{
+      let headerHex = integralToNBytes 80 0x00000020df3b053dc46f162a9b00c7f0d5124e2676d47bbe7c5d0793a500000000000000ef445fef2ed495c275892206ca533e7411907971013ab83e3b47bd0d692d14d4dc7c835b67d8001ac157e670
+          restOfMerkleHex = integerToBS 0xbf0d00000aba412a0d1480e370173072c9562becffe87aa661c1e4a6dbc305d38ec5dc088a7cf92e6458aca7b32edae818f9c2c98c37e06bf72ae0ce80649a38655ee1e27d34d9421d940b16732f24b94023e9d572a7f9ab8023434a4feb532d2adfc8c2c2158785d1bd04eb99df2e86c54bc13e139862897217400def5d72c280222c4cbaee7261831e1550dbb8fa82853e9fe506fc5fda3f7b919d8fe74b6282f92763cef8e625f977af7c8619c32a369b832bc2d051ecd9c73c51e76370ceabd4f25097c256597fa898d404ed53425de608ac6bfe426f6e2bb457f1c554866eb69dcb8d6bf6f880e9a59b3cd053e6c7060eeacaacf4dac6697dac20e4bd3f38a2ea2543d1ab7953e3430790a9f81e1c67f5b58c825acf46bd02848384eebe9af917274cdfbb1a28a5d58a23a17977def0de10d644258d9c54f886d47d293a411cb6226103b55635
+          res :: ParseResult Network.MerkleBlockMsgInfo
+          res = parse $ headerHex <> restOfMerkleHex
+      it "Successfully parsed the given sample MerkleBlock bytestring." $ do
+        shouldBe
+          (isRight $ myTrace "PARSE RESULT" res)
+          True
       -- }}}
 
 

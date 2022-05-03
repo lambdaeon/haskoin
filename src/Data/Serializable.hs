@@ -16,7 +16,7 @@ class Serializable a where
   parser    :: Parser a
   --
   parse     :: ByteString -> ParseResult a
-  parse      = P.runParser parser ""
+  parse     = P.runParser parser ""
 -- }}}
 
 

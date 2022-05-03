@@ -1,6 +1,7 @@
 module SimpleNode where
 
 
+import qualified Block
 import           Conduit
 import           Control.Concurrent             (threadDelay)
 import           Control.Exception
@@ -10,6 +11,7 @@ import qualified Data.ByteString.Lazy           as LBS
 import qualified Data.ByteString.Lazy.Char8     as C
 import qualified Data.Conduit.Network           as CN
 import           Data.Serializable
+import qualified Data.Text                      as T
 import qualified Data.Varint                    as Varint
 import           Data.Varint                    (Varint (..))
 import           Extension.ByteString.Parser
@@ -119,6 +121,34 @@ client = do
   -- }}}
 
 
+-- | Requests maximum number of block heads (2000), starting from
+--   the genesis block. Blocks the thread while waiting for a response,
+--   and in case of successful parse, verifies the validity of the
+--   received chain.
+requestAllBlockHeaders :: Socket -> ExceptT Text IO Network.HeadersMsgInfo
+requestAllBlockHeaders s = do
+  -- {{{
+  Network.envelopeMessage True Network.getAllHeadersMsg
+    & serialize
+    & sendAll s
+    & liftIO
+  response <- liftIO $ recv s (2 ^ 32) -- this probably should be replaced with conduit.
+  case parseHeaders response of
+    Right (Network.Headers hInfo) ->
+      -- {{{
+      case Block.verifyChain (Network.hBlocks hInfo) of
+        Right _ ->
+          return hInfo
+        Left err ->
+          ExceptT $ return $ Left err
+      -- }}}
+    Left _ ->
+      -- {{{
+      ExceptT $ return $ Left "invalid headers response."
+      -- }}}
+  -- }}}
+
+
 -- ** Utils
 -- {{{
 -- | Helper function to generate, envelope and send 
@@ -161,6 +191,14 @@ parseVerAck :: ByteString -> ParseResult Network.Message
 parseVerAck msg =
   -- {{{
   Network.VerAck <$> parse msg
+  -- }}}
+
+
+-- | Helper function.
+parseHeaders :: ByteString -> ParseResult Network.Message
+parseHeaders msg =
+  -- {{{
+  Network.Headers <$> parse msg
   -- }}}
 -- }}}
 

@@ -123,7 +123,7 @@ verifyFor scheme tx@Tx {..} = do
   if fee' >= 0 then
     mapM_ (verifyTxInFor scheme tx) txTxIns
   else
-    fail "negative fee."
+    ExceptT $ return $ Left "negative fee."
   -- }}}
 
 
@@ -265,7 +265,7 @@ getTxInsTxOut testnet TxIn {..} = do
   if txInPrevIndex < outsCount then do
     return $ txOuts !! prevIndex
   else do
-    fail "invalid txout index."
+    ExceptT $ return $ Left "invalid txout index."
   -- }}}
 
 

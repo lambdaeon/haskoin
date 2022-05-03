@@ -10,3 +10,14 @@ safeLast xs =
     _ ->
       Nothing
   -- }}}
+
+
+duplicateLast :: [a] -> [a]
+duplicateLast xs =
+  -- {{{
+  case safeLast xs of
+    Nothing ->
+      xs
+    Just lastX ->
+      xs ++ [lastX]
+  -- }}}
