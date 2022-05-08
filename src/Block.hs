@@ -178,10 +178,10 @@ instance Serializable Header where
     -- }}}
   parser = do
     -- {{{
-    headerVersion    <- word32ParserLE "block's version"
+    headerVersion    <- parser
     headerPrevBlock  <- P.takeP  (Just "block's prev block" ) 32
     headerMerkleRoot <- P.takeP  (Just "block's merkle root") 32
-    headerTimestamp  <- word32ParserLE "block's version"
+    headerTimestamp  <- parser
     headerBits       <- parser
     headerNonce      <- P.takeP  (Just "block's nonce"      ) 4
     return $ Header {..}

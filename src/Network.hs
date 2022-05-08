@@ -123,17 +123,6 @@ defaultProtocolVersion :: Word32
 defaultProtocolVersion = 70015
 
 
--- | Sum type to allow a more concise representation of
---   various messages.
-data Message
-  = Version     VersionMsgInfo
-  | VerAck      VerAckMsgInfo
-  | GetHeaders  GetHeadersMsgInfo
-  | Headers     HeadersMsgInfo
-  | MerkleBlock MerkleBlockMsgInfo
-  deriving (Eq, Show)
-
-
 -- VersionMsgInfo
 -- {{{
 data VersionMsgInfo = VersionMsgInfo
@@ -307,6 +296,7 @@ instance Serializable HeadersMsgInfo where
 
 
 -- MerkleBlockMsgInfo
+-- {{{
 data MerkleBlockMsgInfo = MerkleBlockMsgInfo
   { mbHeader   :: Block.Header
   , mbNumTxs   :: Word32
@@ -332,6 +322,31 @@ instance Serializable MerkleBlockMsgInfo where
     mbFlagBits <- parser
     return $ MerkleBlockMsgInfo {..}
     -- }}}
+
+merkleBlockIsValid :: MerkleBlockMsgInfo -> Bool
+merkleBlockIsValid MerkleBlockMsgInfo {..} =
+  -- {{{
+  let
+    givenRoot = Merkle.Root $ Block.headerMerkleRoot mbHeader
+  in
+  case Merkle.findRoot mbNumTxs mbHashes mbFlagBits of
+    Right foundRoot ->
+      foundRoot == givenRoot
+    _               ->
+      False
+  -- }}}
+-- }}}
+
+
+-- | Sum type to allow a more concise representation of
+--   various messages.
+data Message
+  = Version     VersionMsgInfo
+  | VerAck      VerAckMsgInfo
+  | GetHeaders  GetHeadersMsgInfo
+  | Headers     HeadersMsgInfo
+  | MerkleBlock MerkleBlockMsgInfo
+  deriving (Eq, Show)
 
 
 -- | With the current architecture of `Serializable` typeclass,

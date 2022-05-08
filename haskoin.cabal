@@ -1,9 +1,5 @@
 cabal-version: 3.6
 
--- This file has been generated from package.yaml by hpack version 0.34.5.
---
--- see: https://github.com/sol/hpack
-
 name:           haskoin
 version:        0.1.0.0
 description:    Bitcoin implementation in Haskell.
@@ -12,7 +8,6 @@ bug-reports:    https://github.com/lambdaeon/haskoin/issues
 author:         λeon
 maintainer:     lambdaeon@protonmail.com
 copyright:      2022 ΛEON
--- license:        BSD3
 license:        BSD-3-Clause
 license-file:   LICENSE
 build-type:     Simple

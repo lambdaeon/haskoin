@@ -66,6 +66,7 @@ module Utils
   , foldl'
   , (&)
   , isJust
+  , isNothing
   , fromMaybe
   , fromString
   , Text
@@ -102,7 +103,7 @@ import           Data.Char                   (chr, ord)
 import           Data.List                   (foldl')
 import           Data.Function               ((&))
 import           Data.Functor                (void)
-import           Data.Maybe                  (isJust, fromMaybe)
+import           Data.Maybe                  (isJust, isNothing, fromMaybe)
 import           Data.Memory.Endian          (getSystemEndianness, Endianness (..))
 import           Data.String                 (fromString)
 import qualified Data.String                 as String

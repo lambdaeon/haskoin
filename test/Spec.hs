@@ -620,7 +620,7 @@ main = do
             ] & map LBS.reverse
           ans = Merkle.Root $ LBS.reverse $ integerToBS 0xacbcab8bcc1af95d8d563b77d24c3d19b18f1486383d75a5085c4e86c86beed6
       it "Merkle root of given hashes found successfully." $ do
-        (Merkle.findRoot input) `shouldBe` ans
+        (Merkle.findRootFromHashes input) `shouldBe` ans
       -- }}}
 
     describe "\nChapter 11 - Exercise 4" $ do
@@ -636,7 +636,7 @@ main = do
             ]
           ans = Merkle.Root $ integerToBS 0x654d6181e18e4ac4368383fdc5eead11bf138f9b7ac1e15334e4411b3c4797d9
       it "Merkle root of given hashes found successfully." $ do
-        (Merkle.findRoot input) `shouldBe` ans
+        (Merkle.findRootFromHashes input) `shouldBe` ans
       -- }}}
 
     describe "\nChapter 11 - Exercise 6" $ do
@@ -645,10 +645,86 @@ main = do
           restOfMerkleHex = integerToBS 0xbf0d00000aba412a0d1480e370173072c9562becffe87aa661c1e4a6dbc305d38ec5dc088a7cf92e6458aca7b32edae818f9c2c98c37e06bf72ae0ce80649a38655ee1e27d34d9421d940b16732f24b94023e9d572a7f9ab8023434a4feb532d2adfc8c2c2158785d1bd04eb99df2e86c54bc13e139862897217400def5d72c280222c4cbaee7261831e1550dbb8fa82853e9fe506fc5fda3f7b919d8fe74b6282f92763cef8e625f977af7c8619c32a369b832bc2d051ecd9c73c51e76370ceabd4f25097c256597fa898d404ed53425de608ac6bfe426f6e2bb457f1c554866eb69dcb8d6bf6f880e9a59b3cd053e6c7060eeacaacf4dac6697dac20e4bd3f38a2ea2543d1ab7953e3430790a9f81e1c67f5b58c825acf46bd02848384eebe9af917274cdfbb1a28a5d58a23a17977def0de10d644258d9c54f886d47d293a411cb6226103b55635
           res :: ParseResult Network.MerkleBlockMsgInfo
           res = parse $ headerHex <> restOfMerkleHex
-      it "Successfully parsed the given sample MerkleBlock bytestring." $ do
+          merkleRoot  = integerToBS 0xef445fef2ed495c275892206ca533e7411907971013ab83e3b47bd0d692d14d4
+       -- merkle_root = bytes.fromhex(merkle_root_hex)[::-1]
+          version     :: Word32
+          version     = 0x20000000
+          prevBlockID = integerToBS 0xdf3b053dc46f162a9b00c7f0d5124e2676d47bbe7c5d0793a500000000000000
+       -- prev_block = bytes.fromhex(prev_block_hex)[::-1]
+          timestamp   :: Word32
+          timestamp   = 0x5b837cdc
+          bits        = Block.Bits 0x1a 0x67 0xd8 0x00
+          nonce       = integerToBS 0xc157e670
+          numTxs      = 0x0dbf
+          hashes =
+            [ integerToBS 0xba412a0d1480e370173072c9562becffe87aa661c1e4a6dbc305d38ec5dc088a
+            , integerToBS 0x7cf92e6458aca7b32edae818f9c2c98c37e06bf72ae0ce80649a38655ee1e27d
+            , integerToBS 0x34d9421d940b16732f24b94023e9d572a7f9ab8023434a4feb532d2adfc8c2c2
+            , integerToBS 0x158785d1bd04eb99df2e86c54bc13e139862897217400def5d72c280222c4cba
+            , integerToBS 0xee7261831e1550dbb8fa82853e9fe506fc5fda3f7b919d8fe74b6282f92763ce
+            , integerToBS 0xf8e625f977af7c8619c32a369b832bc2d051ecd9c73c51e76370ceabd4f25097
+            , integerToBS 0xc256597fa898d404ed53425de608ac6bfe426f6e2bb457f1c554866eb69dcb8d
+            , integerToBS 0x6bf6f880e9a59b3cd053e6c7060eeacaacf4dac6697dac20e4bd3f38a2ea2543
+            , integerToBS 0xd1ab7953e3430790a9f81e1c67f5b58c825acf46bd02848384eebe9af917274c
+            , integerToBS 0xdfbb1a28a5d58a23a17977def0de10d644258d9c54f886d47d293a411cb62261
+            ]
+       -- hashes = [bytes.fromhex(h)[::-1] for h in hex_hashes]
+          flagBits = Merkle.FlagBits $ concat $ word8ToBools <$> LBS.unpack (integerToBS 0xb55635)
+      case res of
+        Right info ->
+          let
+            header = Network.mbHeader info
+          in do
+          it "Version of the parsed merkleblock found correctly." $ do
+            shouldBe
+              (Block.headerVersion header)
+              version
+          it "Previous block ID found correctly." $ do
+            shouldBe
+              (Block.headerPrevBlock header)
+              prevBlockID
+          it "Merkle root found correctly." $ do
+            shouldBe
+              (Block.headerMerkleRoot header)
+              merkleRoot
+          it "Timestamp found correctly." $ do
+            shouldBe
+              (Block.headerTimestamp header)
+              timestamp
+          it "Block bits found correctly." $ do
+            shouldBe
+              (Block.headerBits header)
+              bits
+          it "Nonce found correctly." $ do
+            shouldBe
+              (Block.headerNonce header)
+              nonce
+          it "Number of total transactions found correctly." $ do
+            shouldBe
+              (Network.mbNumTxs info)
+              numTxs
+          it "Provided transaction hashes found correctly." $ do
+            shouldBe
+              (Network.mbHashes info)
+              hashes
+          it "Flag bits found correctly." $ do
+            shouldBe
+              (Network.mbFlagBits info)
+              flagBits
+        Left err                                ->
+          runIO $ fail $ show err
+      -- }}}
+
+    describe "\nChapter 11 - Exercise 7" $ do
+      -- {{{
+      let headerHex = integralToNBytes 80 0x00000020df3b053dc46f162a9b00c7f0d5124e2676d47bbe7c5d0793a500000000000000ef445fef2ed495c275892206ca533e7411907971013ab83e3b47bd0d692d14d4dc7c835b67d8001ac157e670
+          restOfMerkleHex = integerToBS 0xbf0d00000aba412a0d1480e370173072c9562becffe87aa661c1e4a6dbc305d38ec5dc088a7cf92e6458aca7b32edae818f9c2c98c37e06bf72ae0ce80649a38655ee1e27d34d9421d940b16732f24b94023e9d572a7f9ab8023434a4feb532d2adfc8c2c2158785d1bd04eb99df2e86c54bc13e139862897217400def5d72c280222c4cbaee7261831e1550dbb8fa82853e9fe506fc5fda3f7b919d8fe74b6282f92763cef8e625f977af7c8619c32a369b832bc2d051ecd9c73c51e76370ceabd4f25097c256597fa898d404ed53425de608ac6bfe426f6e2bb457f1c554866eb69dcb8d6bf6f880e9a59b3cd053e6c7060eeacaacf4dac6697dac20e4bd3f38a2ea2543d1ab7953e3430790a9f81e1c67f5b58c825acf46bd02848384eebe9af917274cdfbb1a28a5d58a23a17977def0de10d644258d9c54f886d47d293a411cb6226103b55635
+          res :: ParseResult Network.MerkleBlockMsgInfo
+          res = parse $ headerHex <> restOfMerkleHex
+      it "Successfully validated the Merkle root of a sample merkleblock." $ do
         shouldBe
-          (isRight $ myTrace "PARSE RESULT" res)
-          True
+          (Network.merkleBlockIsValid <$> res)
+          (Right True)
       -- }}}
 
 
