@@ -33,6 +33,7 @@ library
       FiniteFieldEllipticCurve
       Locktime
       Network
+      Network.Bloom
       Network.Common
       Script
       Script.PayToPubKeyHash
@@ -73,6 +74,7 @@ library
     , megaparsec
     , memory
     , mtl
+    , murmur3
     , network
     , network-run
     , text

@@ -4,10 +4,12 @@ let
 
   inherit (nixpkgs) pkgs;
 
+  allowBroken = true;
+
   f = { mkDerivation, base, base16, binary, bytestring, conduit
       , conduit-extra, containers, cryptonite, groups, hpack, hspec
       , hspec-megaparsec, http-client, http-client-tls, http-conduit, lib
-      , megaparsec, memory, mtl, network, text, time, transformers
+      , megaparsec, memory, mtl, murmur3, network, text, time, transformers
       }:
       mkDerivation {
         pname = "haskoin";
@@ -18,13 +20,13 @@ let
         libraryHaskellDepends = [
           base base16 binary bytestring conduit conduit-extra containers
           cryptonite groups http-client http-client-tls http-conduit
-          megaparsec memory mtl network text time transformers
+          megaparsec memory mtl murmur3 network text time transformers
         ];
         libraryToolDepends = [ hpack ];
         executableHaskellDepends = [
           base base16 binary bytestring conduit conduit-extra containers
           cryptonite groups hspec http-client http-client-tls http-conduit
-          megaparsec memory mtl network text time transformers
+          megaparsec memory mtl murmur3 network text time transformers
         ];
         testHaskellDepends = [
           base base16 binary bytestring conduit conduit-extra containers
@@ -44,7 +46,6 @@ let
   variant = if doBenchmark then pkgs.haskell.lib.doBenchmark else pkgs.lib.id;
 
   drv = variant (haskellPackages.callPackage f {});
-
 in
 
   if pkgs.lib.inNixShell then drv.env else drv

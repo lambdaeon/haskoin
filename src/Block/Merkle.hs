@@ -30,6 +30,7 @@ import           Data.List                   (intercalate)
 import           Data.Map                    (Map)
 import qualified Data.Map                    as Map
 import           Data.Serializable
+import qualified Data.Varint                 as Varint
 import           Extension.List              (duplicateLast)
 -- import qualified Data.Text                   as T
 -- import qualified Extension.ByteString.Lazy   as LBS
@@ -339,11 +340,11 @@ instance Show FlagBits where
 instance Serializable FlagBits where
   serialize (FlagBits bits) =
     -- {{{
-    LBS.pack $ map boolsToWord8 $ splitIn 8 bits
+    boolsToBS bits
     -- }}}
   parser = do
     -- {{{
-    count <- fromIntegral <$> P.anySingle
+    count <- Varint.countParser
     bytes <- P.takeP (Just "flagbits") count
     return $ FlagBits $ concat $ word8ToBools <$> LBS.unpack bytes
     -- }}}

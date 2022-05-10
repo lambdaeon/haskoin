@@ -13,6 +13,7 @@ import qualified Extension.ByteString.Lazy   as LBS
 import           Extension.ByteString.Parser
 import qualified Locktime
 import qualified Network
+import qualified Network.Bloom               as Bloom
 import           Test.Hspec
 import           Test.Hspec.Megaparsec
 import qualified FieldElement                as FE
@@ -725,6 +726,39 @@ main = do
         shouldBe
           (Network.merkleBlockIsValid <$> res)
           (Right True)
+      -- }}}
+
+    describe "\nChapter 12 - Exercise 1" $ do
+      -- {{{
+      it "Bloom Filter for \"hello world\" and \"goodbye\" found successfully." $ do
+        shouldBe
+          ( Bloom.generateBitField
+              10
+              (bsToInteger . hash160)
+              ["hello world", "goodbye"]
+          )
+          [True, True, False, False, False, False, False, False, False, False]
+      -- }}}
+
+    describe "\nChapter 12 - Exercise 2" $ do
+      -- {{{
+      let bf  = Bloom.makeFilter 10 5 99 ["Hello World", "Goodbye!"]
+          ans = integerToBS 0x4000600a080000010940
+      it "Bloom Filter for \"Hello World\" and \"Goodbye!\" found successfully." $ do
+        shouldBe
+          (boolsToBS $ Bloom.getBitField bf)
+          ans
+      -- }}}
+
+    describe "\nChapter 12 - Exercise 3" $ do
+      -- {{{
+      let bf0 = Bloom.makeFilter 10 5 99 ["Hello World"]
+          bf1 = Bloom.addItemToFilter "Goodbye!" bf0
+          ans = integerToBS 0x4000600a080000010940
+      it "Bloom Filter for \"Hello World\" with \"Goodbye!\" added, found successfully." $ do
+        shouldBe
+          (boolsToBS $ Bloom.getBitField bf1)
+          ans
       -- }}}
 
 

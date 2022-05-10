@@ -30,6 +30,7 @@ src
 ├── FiniteFieldEllipticCurve.hs
 ├── Locktime.hs
 ├── Network
+│   ├── Bloom.hs
 │   └── Common.hs
 ├── Network.hs
 ├── Script
@@ -45,5 +46,5 @@ src
 ├── TxOut.hs
 └── Utils.hs
 
-6 directories, 25 files
+6 directories, 26 files
 ```

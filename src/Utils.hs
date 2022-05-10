@@ -42,8 +42,11 @@ module Utils
   , ripemd160
   , hash160
   , hash256
+  , murmur3
   , word8ToBools
   , boolsToWord8
+  , boolsToBS
+  , bsToBools
   , splitIn
   , indexedMap
   , indexedMapM
@@ -84,7 +87,7 @@ module Utils
 -- IMPORTS
 -- {{{
 import           Debug.Trace                 (trace)
-import           Control.Monad               (zipWithM, foldM)
+import           Control.Monad               (zipWithM, foldM, replicateM)
 import           Control.Monad.IO.Class
 import           Control.Monad.Trans.Except
 import           Control.Monad.Trans.Maybe
@@ -103,6 +106,7 @@ import           Data.Char                   (chr, ord)
 import           Data.List                   (foldl')
 import           Data.Function               ((&))
 import           Data.Functor                (void)
+import qualified Data.Hash.Murmur            as Murmur
 import           Data.Maybe                  (isJust, isNothing, fromMaybe)
 import           Data.Memory.Endian          (getSystemEndianness, Endianness (..))
 import           Data.String                 (fromString)
@@ -630,6 +634,14 @@ hash256 =
   -- }}}
 
 
+-- | Wrapping function for `Murmur.murmur3` to work with lazy `ByteString`. 
+murmur3 :: Word32 -> ByteString -> Word32
+murmur3 nHashSeed =
+  -- {{{
+  Murmur.murmur3 nHashSeed . LBS.toStrict
+  -- }}}
+
+
 -- | Converts a `Word8` into a list of `Bool` values, each representing a bit.
 --   Least significant bit will sit at list's head.
 word8ToBools :: Word8 -> [Bool]
@@ -641,12 +653,28 @@ word8ToBools w8 =
 
 -- | Converts a list of `Bool` values (representing bits) to a byte.
 --   Lists with less elements than 8 are "0-padded" to right, while
---   only the first 8 elements of bigger lists are considered..
+--   only the first 8 elements of bigger lists are considered.
 boolsToWord8 :: [Bool] -> Word8
 boolsToWord8 [] = 0
 boolsToWord8 xs =
   -- {{{
-  foldl setBit 0 (map snd $ filter fst $ zip xs [0..7])
+  foldl setBit 0 (map snd $ filter fst $ zip xs [0 .. 7])
+  -- }}}
+
+
+-- | Converts a list of bits to a `ByteString`.
+boolsToBS :: [Bool] -> ByteString
+boolsToBS bits =
+  -- {{{
+  LBS.pack $ map boolsToWord8 $ splitIn 8 bits
+  -- }}}
+
+
+-- | Converts a `ByteString` to a list of bits.
+bsToBools :: ByteString -> [Bool]
+bsToBools bytes =
+  -- {{{
+  concatMap word8ToBools (LBS.unpack bytes)
   -- }}}
 
 
