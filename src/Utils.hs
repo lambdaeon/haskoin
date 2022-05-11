@@ -6,6 +6,10 @@ module Utils
   , eightWeeks
   , mainnetNetworkMagic
   , testnetNetworkMagic
+  , txDataTypeConstant
+  , blockDataTypeConstant
+  , filteredBlockDataTypeConstant
+  , compactBlockDataTypeConstant
   , encodeHex
   , encodeHexLE
   , encodeBase58
@@ -142,6 +146,22 @@ mainnetNetworkMagic = integralToNBytes 4 0xf9beb4d9
 
 testnetNetworkMagic :: ByteString
 testnetNetworkMagic = integralToNBytes 4 0x0b110907
+
+
+txDataTypeConstant :: Word32
+txDataTypeConstant = 1
+
+
+blockDataTypeConstant :: Word32
+blockDataTypeConstant = 2
+
+
+filteredBlockDataTypeConstant :: Word32
+filteredBlockDataTypeConstant = 3
+
+
+compactBlockDataTypeConstant :: Word32
+compactBlockDataTypeConstant = 4
 -- }}}
 
 

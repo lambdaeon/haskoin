@@ -10,6 +10,7 @@ import qualified Data.Varint                 as Varint
 import           Data.Serializable
 import           Extension.ByteString.Parser
 import qualified Extension.ByteString.Lazy   as LBS
+import           Network.Bloom               (BloomFilter)
 import           Network.Common
 import           Text.Megaparsec             ((<|>))
 import qualified Text.Megaparsec             as P
@@ -109,6 +110,22 @@ envelopeMessage testnet (MerkleBlock info) =
   -- {{{
   Envelope
     { envCommand = "merkleblock"
+    , envPayload = serialize info
+    , envTestnet = testnet
+    }
+  -- }}}
+envelopeMessage testnet (FilterLoad info) =
+  -- {{{
+  Envelope
+    { envCommand = "filterload"
+    , envPayload = serialize info
+    , envTestnet = testnet
+    }
+  -- }}}
+envelopeMessage testnet (GetData info) =
+  -- {{{
+  Envelope
+    { envCommand = "getdata"
     , envPayload = serialize info
     , envTestnet = testnet
     }
@@ -338,6 +355,68 @@ merkleBlockIsValid MerkleBlockMsgInfo {..} =
 -- }}}
 
 
+-- FilterLoadMsgInfo
+-- {{{
+data FilterLoadMsgInfo = FilterLoadMsgInfo
+  { flBloomFilter :: BloomFilter
+  , flMatchedItem :: Bool
+  } deriving (Eq, Show)
+
+instance Serializable FilterLoadMsgInfo where
+  serialize FilterLoadMsgInfo {..} =
+    -- {{{
+       serialize flBloomFilter
+    <> serialize flMatchedItem
+    -- }}}
+  parser = do
+    -- {{{
+    flBloomFilter <- parser
+    flMatchedItem <- parser
+    return $ FilterLoadMsgInfo {..}
+    -- }}}
+-- }}}
+
+
+-- GetDataMsgInfo
+-- {{{
+newtype GetDataMsgInfo = GetDataMsgInfo
+  { gdData :: [GetDataItem]
+  } deriving (Eq, Show)
+
+
+instance Serializable GetDataMsgInfo where
+  serialize GetDataMsgInfo {..} =
+    -- {{{
+    Varint.serializeList gdData
+    -- }}}
+  parser = do
+    -- {{{
+    gdData <- Varint.lengthPrefixed parser
+    return $ GetDataMsgInfo {..}
+    -- }}}
+
+
+data GetDataItem = GetDataItem
+  { dataType       :: Word32
+  , dataIdentifier :: ByteString
+  } deriving (Eq, Show)
+
+instance Serializable GetDataItem where
+  serialize GetDataItem {..} =
+    -- {{{
+       serialize dataType
+    <> LBS.reverse dataIdentifier -- from book's answers.py
+    -- }}}
+  parser = do
+    -- {{{
+    dataType       <- parser
+    --                        not sure about this... -----------vv
+    dataIdentifier <- P.takeP (Just "getdata item identifier.") 32
+    return $ GetDataItem {..}
+    -- }}}
+-- }}}
+
+
 -- | Sum type to allow a more concise representation of
 --   various messages.
 data Message
@@ -346,6 +425,8 @@ data Message
   | GetHeaders  GetHeadersMsgInfo
   | Headers     HeadersMsgInfo
   | MerkleBlock MerkleBlockMsgInfo
+  | FilterLoad  FilterLoadMsgInfo
+  | GetData     GetDataMsgInfo
   deriving (Eq, Show)
 
 
@@ -359,6 +440,8 @@ serializeMessage (VerAck      verAckInfo) = serialize verAckInfo
 serializeMessage (GetHeaders  ghInfo    ) = serialize ghInfo
 serializeMessage (Headers     hInfo     ) = serialize hInfo
 serializeMessage (MerkleBlock mbInfo    ) = serialize mbInfo
+serializeMessage (FilterLoad  flInfo    ) = serialize flInfo
+serializeMessage (GetData     gdInfo    ) = serialize gdInfo
 -- }}}
 
 

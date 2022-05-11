@@ -761,5 +761,39 @@ main = do
           ans
       -- }}}
 
+    describe "\nChapter 12 - Exercise 4" $ do
+      -- {{{
+      let bf0 = Bloom.makeFilter 10 5 99 ["Hello World"]
+          bf1 = Bloom.addItemToFilter "Goodbye!" bf0
+          msg = Network.FilterLoadMsgInfo bf1 True
+          ans = integerToBS 0x0a4000600a080000010940050000006300000001
+      it "Successfully serialized a `FilterLoadMsgInfo` value." $ do
+        shouldBe
+          (serialize msg)
+          ans
+      -- }}}
+
+    describe "\nChapter 12 - Exercise 5" $ do
+      -- {{{
+      let item0 =
+            -- {{{
+            Network.GetDataItem
+              filteredBlockDataTypeConstant
+              (LBS.replicate 7 0x00 <> integerToBS 0xcac712b726e4326e596170574c01a16001692510c44025eb30)
+            -- }}}
+          item1 =
+            -- {{{
+            Network.GetDataItem
+              filteredBlockDataTypeConstant
+              (LBS.replicate 7 0x00 <> integerToBS 0xbeb88910c46f6b442312361c6693a7fb52065b583979844910)
+            -- }}}
+          msg = Network.GetDataMsgInfo [item0, item1]
+          ans = integerToBS 0x020300000030eb2540c41025690160a1014c577061596e32e426b712c7ca00000000000000030000001049847939585b0652fba793661c361223446b6fc41089b8be00000000000000
+      it "Successfully serialized a `GetDataMsgInfo` value." $ do
+        shouldBe
+          (serialize msg)
+          ans
+      -- }}}
+
 
 

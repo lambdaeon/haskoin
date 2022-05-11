@@ -7,8 +7,11 @@ module Network.Bloom
   ) where
 
 
-import qualified Block.Merkle as Merkle
-import Utils
+import           Data.Serializable
+import           Data.Varint     (Varint (..))
+import qualified Data.Varint     as Varint
+import qualified Text.Megaparsec as P
+import           Utils
 
 
 bip37Constant :: Word32
@@ -39,6 +42,23 @@ data BloomFilter = BloomFilter
   , bfFuncCount :: Word32
   , bfTweak     :: Word32
   } deriving (Eq, Show)
+
+instance Serializable BloomFilter where
+  serialize BloomFilter {..} =
+    -- {{{
+       serialize (Varint $ fromIntegral $ length bfBitField `div` 8)
+    <> boolsToBS bfBitField
+    <> serialize bfFuncCount
+    <> serialize bfTweak
+    -- }}}
+  parser = do
+    -- {{{
+    byteCount   <- Varint.countParser
+    bfBitField  <- bsToBools <$> P.takeP (Just "bit field bytes.") byteCount
+    bfFuncCount <- parser
+    bfTweak     <- parser
+    return $ BloomFilter {..}
+    -- }}}
 
 
 -- | Getter handle to accommodate `BloomFilter`'s opaqueness.
